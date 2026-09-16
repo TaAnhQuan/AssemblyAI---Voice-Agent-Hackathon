@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Voice Agent - AssemblyAI</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
+    }
+    .card {
+      background: #1e293b;
+      padding: 1.5rem;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 600px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    }
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .badge {
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+    .badge.connected { background: #15803d; color: #dcfce7; }
+    .badge.disconnected { background: #b91c1c; color: #fee2e2; }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 1rem;
+      transition: background 0.2s;
+    }
+    button:hover { background: #1d4ed8; }
+    button.stop { background: #dc2626; }
+    button.stop:hover { background: #b91c1c; }
+    .logs {
+      margin-top: 1.5rem;
+      background: #0b0f19;
+      padding: 1rem;
+      border-radius: 8px;
+      height: 250px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+    }
+    .log-entry { margin-bottom: 0.5rem; }
+    .log-agent { color: #60a5fa; }
+    .log-user { color: #4ade80; }
+    .log-tool { color: #f59e0b; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="status-bar">
+      <h2>DisputeFlow Voice Agent</h2>
+      <span id="statusBadge" class="badge disconnected">Disconnected</span>
+    </div>
+
+    <p style="color: #94a3b8; font-size: 0.9rem;">
+      Click <strong>Start Call</strong> to stream 16kHz PCM audio to the backend relay.
+    </p>
+
+    <button id="toggleBtn" onclick="toggleCall()">Start Call</button>
+
+    <div class="logs" id="logContainer">
+      <div style="color: #64748b;">[Logs & transcripts will appear here...]</div>
+    </div>
+  </div>
+
+  <script>
+    let ws = null;
+    let audioContext = null;
+    let micStream = null;
+    let processorNode = null;
+    let isConnected = false;
+
+    // Output Audio Queue variables
+    let nextStartTime = 0;
+    const SAMPLE_RATE = 16000;
+
+    const toggleBtn = document.getElementById("toggleBtn");
+    const statusBadge = document.getElementById("statusBadge");
+    const logContainer = document.getElementById("logContainer");
+
+    function appendLog(type, text) {
+      const el = document.createElement("div");
+      el.className = `log-entry log-${type}`;
+      el.textContent = `[${type.toUpperCase()}] ${text}`;
+      logContainer.appendChild(el);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    async function toggleCall() {
+      if (isConnected) {
+        stopCall();
+      } else {
+        await startCall();
+      }
+    }
+
+    async function startCall() {
+      try {
+        // 1. Initialize AudioContext at 16kHz
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: SAMPLE_RATE
+        });
+        await audioContext.resume();
+
+        // 2. Open WebSocket
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const wsUrl = `${protocol}//${window.location.host}/ws/voice`;
+        ws = new WebSocket(wsUrl);
+        ws.binaryType = "arraybuffer";
+
+        ws.onopen = async () => {
+          isConnected = true;
+          toggleBtn.textContent = "End Call";
+          toggleBtn.className = "stop";
+          statusBadge.textContent = "Connected";
+          statusBadge.className = "badge connected";
+          appendLog("info", "Session established.");
+          
+          await startMicRecording();
+        };
+
+        // 3. Handle messages from server
+        ws.onmessage = async (event) => {
+          if (typeof event.data === "string") {
+            const data = JSON.parse(event.data);
+
+            if (data.type === "transcript") {
+              const role = data.role === "agent" ? "agent" : "user";
+              appendLog(role, data.text);
+            } else if (data.type === "tool_call") {
+              appendLog("tool", `Executing: ${data.tool_call.function.name}`);
+            } else if (data.type === "interruption") {
+              appendLog("info", "User interrupted agent. Clearing playback queue.");
+              // Flush audio pipeline on barge-in
+              nextStartTime = audioContext.currentTime;
+            }
+          } else {
+            // Binary audio received from agent (PCM 16-bit 16kHz)
+            playPcmChunk(event.data);
+          }
+        };
+
+        ws.onclose = () => stopCall();
+        ws.onerror = (err) => console.error("WS error:", err);
+
+      } catch (err) {
+        console.error("Failed to start session:", err);
+        stopCall();
+      }
+    }
+
+    async function startMicRecording() {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: SAMPLE_RATE,
+          echoCancellation: true,
+          noiseSuppression: true
+        }
+      });
+
+      const source = audioContext.createMediaStreamSource(micStream);
+      
+      // ScriptProcessor is widely compatible for quick PCM chunking
+      processorNode = audioContext.createScriptProcessor(4096, 1, 1);
+
+      processorNode.onaudioprocess = (e) => {
+        if (!isConnected || ws.readyState !== WebSocket.OPEN) return;
+
+        const inputData = e.inputBuffer.getChannelData(0);
+        // Convert Float32Array to Int16Array (16-bit linear PCM)
+        const pcm16 = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          const s = Math.max(-1, Math.min(1, inputData[i]));
+          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        ws.send(pcm16.buffer);
+      };
+
+      source.connect(processorNode);
+      processorNode.connect(audioContext.destination);
+    }
+
+    // Convert raw PCM byte buffer back to AudioBuffer and schedule seamless playback
+    function playPcmChunk(arrayBuffer) {
+      const pcm16 = new Int16Array(arrayBuffer);
+      const float32 = new Float32Array(pcm16.length);
+
+      for (let i = 0; i < pcm16.length; i++) {
+        float32[i] = pcm16[i] / 32768.0;
+      }
+
+      const audioBuffer = audioContext.createBuffer(1, float32.length, SAMPLE_RATE);
+      audioBuffer.getChannelData(0).set(float32);
+
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.destination);
+
+      // Seamless queuing mechanism
+      const currentTime = audioContext.currentTime;
+      if (nextStartTime < currentTime) {
+        nextStartTime = currentTime;
+      }
+
+      source.start(nextStartTime);
+      nextStartTime += audioBuffer.duration;
+    }
+
+    function stopCall() {
+      isConnected = false;
+      toggleBtn.textContent = "Start Call";
+      toggleBtn.className = "";
+      statusBadge.textContent = "Disconnected";
+      statusBadge.className = "badge disconnected";
+
+      if (processorNode) processorNode.disconnect();
+      if (micStream) micStream.getTracks().forEach((t) => t.stop());
+      if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+      if (audioContext && audioContext.state !== "closed") audioContext.close();
+
+      nextStartTime = 0;
+      appendLog("info", "Session closed.");
+    }
+  </script>
+</body>
+</html>

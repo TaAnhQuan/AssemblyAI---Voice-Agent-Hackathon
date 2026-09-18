@@ -1,252 +1,708 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Voice Agent - AssemblyAI</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f172a;
-      color: #f8fafc;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 2rem;
-    }
-    .card {
-      background: #1e293b;
-      padding: 1.5rem;
-      border-radius: 12px;
-      width: 100%;
-      max-width: 600px;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-    }
-    .status-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1rem;
-    }
-    .badge {
-      padding: 0.25rem 0.75rem;
-      border-radius: 9999px;
-      font-size: 0.875rem;
-      font-weight: 600;
-    }
-    .badge.connected { background: #15803d; color: #dcfce7; }
-    .badge.disconnected { background: #b91c1c; color: #fee2e2; }
-    button {
-      background: #2563eb;
-      color: white;
-      border: none;
-      padding: 0.75rem 1.5rem;
-      border-radius: 8px;
-      font-weight: 600;
-      cursor: pointer;
-      width: 100%;
-      margin-top: 1rem;
-      transition: background 0.2s;
-    }
-    button:hover { background: #1d4ed8; }
-    button.stop { background: #dc2626; }
-    button.stop:hover { background: #b91c1c; }
-    .logs {
-      margin-top: 1.5rem;
-      background: #0b0f19;
-      padding: 1rem;
-      border-radius: 8px;
-      height: 250px;
-      overflow-y: auto;
-      font-family: monospace;
-      font-size: 0.85rem;
-      white-space: pre-wrap;
-    }
-    .log-entry { margin-bottom: 0.5rem; }
-    .log-agent { color: #60a5fa; }
-    .log-user { color: #4ade80; }
-    .log-tool { color: #f59e0b; }
-  </style>
-</head>
-<body>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>OmniPulse Support Portal & Live Voice Bridge</title>
 
-  <div class="card">
-    <div class="status-bar">
-      <h2>DisputeFlow Voice Agent</h2>
-      <span id="statusBadge" class="badge disconnected">Disconnected</span>
-    </div>
+  <!-- Inline Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎙️</text></svg>">
 
-    <p style="color: #94a3b8; font-size: 0.9rem;">
-      Click <strong>Start Call</strong> to stream 16kHz PCM audio to the backend relay.
-    </p>
+  <!-- Google Fonts & Material Symbols -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
 
-    <button id="toggleBtn" onclick="toggleCall()">Start Call</button>
-
-    <div class="logs" id="logContainer">
-      <div style="color: #64748b;">[Logs & transcripts will appear here...]</div>
-    </div>
-  </div>
-
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    let ws = null;
-    let audioContext = null;
-    let micStream = null;
-    let processorNode = null;
-    let isConnected = false;
-
-    // Output Audio Queue variables
-    let nextStartTime = 0;
-    const SAMPLE_RATE = 16000;
-
-    const toggleBtn = document.getElementById("toggleBtn");
-    const statusBadge = document.getElementById("statusBadge");
-    const logContainer = document.getElementById("logContainer");
-
-    function appendLog(type, text) {
-      const el = document.createElement("div");
-      el.className = `log-entry log-${type}`;
-      el.textContent = `[${type.toUpperCase()}] ${text}`;
-      logContainer.appendChild(el);
-      logContainer.scrollTop = logContainer.scrollHeight;
-    }
-
-    async function toggleCall() {
-      if (isConnected) {
-        stopCall();
-      } else {
-        await startCall();
-      }
-    }
-
-    async function startCall() {
-      try {
-        // 1. Initialize AudioContext at 16kHz
-        audioContext = new (window.AudioContext || window.webkitAudioContext)({
-          sampleRate: SAMPLE_RATE
-        });
-        await audioContext.resume();
-
-        // 2. Open WebSocket
-        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = `${protocol}//${window.location.host}/ws/voice`;
-        ws = new WebSocket(wsUrl);
-        ws.binaryType = "arraybuffer";
-
-        ws.onopen = async () => {
-          isConnected = true;
-          toggleBtn.textContent = "End Call";
-          toggleBtn.className = "stop";
-          statusBadge.textContent = "Connected";
-          statusBadge.className = "badge connected";
-          appendLog("info", "Session established.");
-          
-          await startMicRecording();
-        };
-
-        // 3. Handle messages from server
-        ws.onmessage = async (event) => {
-          if (typeof event.data === "string") {
-            const data = JSON.parse(event.data);
-
-            if (data.type === "transcript") {
-              const role = data.role === "agent" ? "agent" : "user";
-              appendLog(role, data.text);
-            } else if (data.type === "tool_call") {
-              appendLog("tool", `Executing: ${data.tool_call.function.name}`);
-            } else if (data.type === "interruption") {
-              appendLog("info", "User interrupted agent. Clearing playback queue.");
-              // Flush audio pipeline on barge-in
-              nextStartTime = audioContext.currentTime;
-            }
-          } else {
-            // Binary audio received from agent (PCM 16-bit 16kHz)
-            playPcmChunk(event.data);
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#3525cd",
+            "primary-container": "#4f46e5",
+            "on-primary": "#ffffff",
+            "on-primary-container": "#dad7ff",
+            "primary-fixed": "#e2dfff",
+            "primary-fixed-dim": "#c3c0ff",
+            "on-primary-fixed": "#0f0069",
+            "on-primary-fixed-variant": "#3323cc",
+            "secondary": "#006c4a",
+            "secondary-container": "#82f5c1",
+            "on-secondary": "#ffffff",
+            "on-secondary-container": "#00714e",
+            "secondary-fixed": "#85f8c4",
+            "secondary-fixed-dim": "#68dba9",
+            "on-secondary-fixed": "#002114",
+            "on-secondary-fixed-variant": "#005137",
+            "tertiary": "#004c76",
+            "tertiary-container": "#00659a",
+            "on-tertiary": "#ffffff",
+            "on-tertiary-container": "#bedfff",
+            "background": "#faf8ff",
+            "on-background": "#131b2e",
+            "surface": "#faf8ff",
+            "surface-dim": "#d2d9f4",
+            "surface-bright": "#faf8ff",
+            "surface-container-lowest": "#ffffff",
+            "surface-container-low": "#f2f3ff",
+            "surface-container": "#eaedff",
+            "surface-container-high": "#e2e7ff",
+            "surface-container-highest": "#dae2fd",
+            "on-surface": "#131b2e",
+            "on-surface-variant": "#464555",
+            "outline": "#777587",
+            "outline-variant": "#c7c4d8",
+            "error": "#ba1a1a",
+            "error-container": "#ffdad6",
+            "on-error": "#ffffff",
+            "on-error-container": "#93000a"
+          },
+          fontFamily: {
+            sans: ["Plus Jakarta Sans", "sans-serif"],
+            code: ["JetBrains Mono", "monospace"]
           }
-        };
-
-        ws.onclose = () => stopCall();
-        ws.onerror = (err) => console.error("WS error:", err);
-
-      } catch (err) {
-        console.error("Failed to start session:", err);
-        stopCall();
-      }
-    }
-
-    async function startMicRecording() {
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          sampleRate: SAMPLE_RATE,
-          echoCancellation: true,
-          noiseSuppression: true
         }
-      });
-
-      const source = audioContext.createMediaStreamSource(micStream);
-      
-      // ScriptProcessor is widely compatible for quick PCM chunking
-      processorNode = audioContext.createScriptProcessor(4096, 1, 1);
-
-      processorNode.onaudioprocess = (e) => {
-        if (!isConnected || ws.readyState !== WebSocket.OPEN) return;
-
-        const inputData = e.inputBuffer.getChannelData(0);
-        // Convert Float32Array to Int16Array (16-bit linear PCM)
-        const pcm16 = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
-          const s = Math.max(-1, Math.min(1, inputData[i]));
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-        }
-
-        ws.send(pcm16.buffer);
-      };
-
-      source.connect(processorNode);
-      processorNode.connect(audioContext.destination);
-    }
-
-    // Convert raw PCM byte buffer back to AudioBuffer and schedule seamless playback
-    function playPcmChunk(arrayBuffer) {
-      const pcm16 = new Int16Array(arrayBuffer);
-      const float32 = new Float32Array(pcm16.length);
-
-      for (let i = 0; i < pcm16.length; i++) {
-        float32[i] = pcm16[i] / 32768.0;
       }
-
-      const audioBuffer = audioContext.createBuffer(1, float32.length, SAMPLE_RATE);
-      audioBuffer.getChannelData(0).set(float32);
-
-      const source = audioContext.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContext.destination);
-
-      // Seamless queuing mechanism
-      const currentTime = audioContext.currentTime;
-      if (nextStartTime < currentTime) {
-        nextStartTime = currentTime;
-      }
-
-      source.start(nextStartTime);
-      nextStartTime += audioBuffer.duration;
-    }
-
-    function stopCall() {
-      isConnected = false;
-      toggleBtn.textContent = "Start Call";
-      toggleBtn.className = "";
-      statusBadge.textContent = "Disconnected";
-      statusBadge.className = "badge disconnected";
-
-      if (processorNode) processorNode.disconnect();
-      if (micStream) micStream.getTracks().forEach((t) => t.stop());
-      if (ws && ws.readyState === WebSocket.OPEN) ws.close();
-      if (audioContext && audioContext.state !== "closed") audioContext.close();
-
-      nextStartTime = 0;
-      appendLog("info", "Session closed.");
-    }
+    };
   </script>
+
+  <style>
+    .material-symbols-outlined {
+      font-family: 'Material Symbols Outlined' !important;
+      font-weight: normal;
+      font-style: normal;
+      font-size: 24px;
+      line-height: 1;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-smoothing: antialiased;
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      vertical-align: middle;
+    }
+    .material-symbols-filled {
+      font-family: 'Material Symbols Outlined' !important;
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24 !important;
+    }
+  </style>
+
+  <link rel="stylesheet" href="/static/css/styles.css"/>
+</head>
+<body class="bg-background font-sans text-on-surface min-h-screen flex flex-col antialiased selection:bg-primary selection:text-white">
+
+  <!-- ========================================================================= -->
+  <!-- TOP HEADER                                                                -->
+  <!-- ========================================================================= -->
+  <header class="fixed top-0 left-0 right-0 h-16 bg-surface-container-lowest/90 backdrop-blur-xl border-b border-outline-variant/30 shadow-[0_1px_8px_rgba(0,0,0,0.03)] z-50 flex items-center justify-between px-4 sm:px-6">
+    <!-- Brand Logo -->
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-white shadow-sm font-bold text-lg">
+        <span class="material-symbols-outlined text-[22px]">graphic_eq</span>
+      </div>
+      <div class="flex items-center gap-2 cursor-pointer" onclick="navigateTo('#ticket-queue')">
+        <span class="font-bold text-lg text-on-surface tracking-tight">OmniPulse Support</span>
+        <span class="hidden sm:inline-block px-2 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed font-semibold text-[11px] uppercase tracking-wider">Enterprise</span>
+      </div>
+    </div>
+
+    <!-- Right-Hand Header Controls (Hidden on #login and #register) -->
+    <div id="header-user-controls" class="flex items-center">
+      <button id="user-menu-btn" onclick="handleAuthHeaderClick()" class="flex items-center gap-2 pl-2 text-left cursor-pointer focus:outline-none group">
+        <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-xs shadow-sm ring-2 ring-surface-container-high group-hover:ring-primary transition-all">
+          <span id="user-avatar-initials">--</span>
+        </div>
+        <div class="hidden lg:flex flex-col">
+          <span id="user-display-name" class="text-xs font-semibold text-on-surface leading-tight">Guest</span>
+          <span id="user-auth-action" class="text-[10px] text-outline">Sign Out</span>
+        </div>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- MAIN WORKSPACE                                                            -->
+  <!-- ========================================================================= -->
+  <main class="w-full pt-16 flex-1 bg-background relative flex flex-col">
+
+    <!-- Toast Banner -->
+    <div id="toast-banner" class="fixed top-20 right-6 z-50 hidden transition-all duration-300 max-w-md p-4 rounded-xl shadow-lg border flex items-start gap-3">
+      <span id="toast-icon" class="material-symbols-outlined text-[22px] mt-0.5"></span>
+      <div class="flex-1">
+        <div id="toast-title" class="font-bold text-sm"></div>
+        <div id="toast-message" class="text-xs mt-0.5 opacity-90 leading-relaxed"></div>
+      </div>
+      <button onclick="hideToast()" class="text-current opacity-60 hover:opacity-100">
+        <span class="material-symbols-outlined text-[18px]">close</span>
+      </button>
+    </div>
+
+    <!-- VIEW 1: LOGIN (#login) -->
+    <div id="view-login" class="view-panel w-full py-10 px-4 flex justify-center">
+      <div class="w-full max-w-xl bg-surface-container-lowest rounded-2xl shadow-sm border border-outline-variant/30 p-6 sm:p-10 relative">
+        <div class="mb-8">
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed-variant mb-3">
+            <span class="material-symbols-outlined text-[16px]">login</span>
+            <span class="font-semibold text-xs uppercase tracking-wider">Customer Authentication</span>
+          </div>
+          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-on-surface">Sign in to your account</h1>
+          <p class="text-sm text-on-surface-variant mt-2">Access your support tickets, real-time voice triage, and SLA dispatch.</p>
+        </div>
+
+        <form id="login-form" autocomplete="off" onsubmit="event.preventDefault(); handleLoginSubmit();" class="space-y-5">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="login-email">Work Email</label>
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px]">alternate_email</span>
+              <input id="login-email" class="w-full pl-11 pr-4 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="name@company.com" required type="email" autocomplete="username"/>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="login-password">Password</label>
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock</span>
+              <input id="login-password" class="w-full pl-11 pr-11 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="••••••••••••" required type="password" autocomplete="current-password"/>
+              <button class="absolute right-3.5 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface focus:outline-none" onclick="togglePasswordVisibility('login-password', this)" type="button">
+                <span class="material-symbols-outlined text-[20px]">visibility</span>
+              </button>
+            </div>
+          </div>
+
+          <button id="login-submit-btn" class="w-full py-3 px-6 rounded-xl bg-primary text-white font-semibold text-sm shadow-md hover:bg-primary-container active:scale-[0.99] transition-all flex items-center justify-center gap-2" type="submit">
+            <span>Sign In to Support Hub</span>
+            <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+          </button>
+
+          <p class="text-xs text-center text-on-surface-variant pt-2">
+            Don't have an enterprise account? <a class="font-semibold text-primary hover:underline ml-1" href="#register">Register now</a>
+          </p>
+        </form>
+      </div>
+    </div>
+
+    <!-- VIEW 2: REGISTER (#register) -->
+    <div id="view-register" class="view-panel hidden w-full py-10 px-4 flex justify-center">
+      <div class="w-full max-w-xl bg-surface-container-lowest rounded-2xl shadow-sm border border-outline-variant/30 p-6 sm:p-10 relative">
+        <div class="flex items-center justify-between mb-6">
+          <a href="#login" class="inline-flex items-center gap-1 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors">
+            <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+            <span>Back to Sign In</span>
+          </a>
+          <span class="font-code text-[11px] text-outline">STAGE: ONBOARDING</span>
+        </div>
+
+        <div class="mb-6">
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed-variant mb-2">
+            <span class="material-symbols-outlined text-[16px]">badge</span>
+            <span class="font-semibold text-xs uppercase tracking-wider">Enterprise Onboarding</span>
+          </div>
+          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-on-surface">Create your support account</h1>
+        </div>
+
+        <form id="register-form" autocomplete="off" onsubmit="event.preventDefault(); handleRegisterSubmit();" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="reg-name">Full Legal Name</label>
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px]">person</span>
+              <input id="reg-name" class="w-full pl-11 pr-4 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="e.g. Alex Mercer" required type="text" autocomplete="off"/>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="reg-email">Work Email</label>
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px]">alternate_email</span>
+              <input id="reg-email" class="w-full pl-11 pr-4 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="name@company.com" required type="email" autocomplete="off"/>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="reg-password">Password</label>
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock</span>
+              <input id="reg-password" oninput="evaluatePasswordStrength(this.value)" class="w-full pl-11 pr-11 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="••••••••••••" required type="password" autocomplete="new-password"/>
+              <button class="absolute right-3.5 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface focus:outline-none" onclick="togglePasswordVisibility('reg-password', this)" type="button">
+                <span class="material-symbols-outlined text-[20px]">visibility</span>
+              </button>
+            </div>
+            <div class="grid grid-cols-4 gap-1.5 mt-2">
+              <div id="meter-bar-1" class="h-1 rounded-full bg-surface-container-high transition-colors"></div>
+              <div id="meter-bar-2" class="h-1 rounded-full bg-surface-container-high transition-colors"></div>
+              <div id="meter-bar-3" class="h-1 rounded-full bg-surface-container-high transition-colors"></div>
+              <div id="meter-bar-4" class="h-1 rounded-full bg-surface-container-high transition-colors"></div>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="reg-confirm-password">Confirm Password</label>
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock_reset</span>
+              <input id="reg-confirm-password" oninput="checkPasswordMatch()" class="w-full pl-11 pr-11 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="••••••••••••" required type="password" autocomplete="new-password"/>
+              <span id="reg-match-icon" class="material-symbols-outlined absolute right-3.5 top-1/2 -translate-y-1/2 text-[20px] hidden"></span>
+            </div>
+          </div>
+
+          <div class="pt-2">
+            <button id="register-submit-btn" class="w-full py-3 px-6 rounded-xl bg-primary text-white font-semibold text-sm shadow-md hover:bg-primary-container active:scale-[0.99] transition-all flex items-center justify-center gap-2" type="submit">
+              <span>Register for Support Hub</span>
+              <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+            </button>
+          </div>
+
+          <p class="text-xs text-center text-on-surface-variant pt-1">
+            Already have an enterprise account? <a class="font-semibold text-primary hover:underline ml-1" href="#login">Sign in here</a>
+          </p>
+        </form>
+      </div>
+    </div>
+
+    <!-- VIEW 3: CREATE TICKET (#create-ticket) -->
+    <div id="view-create-ticket" class="view-panel hidden w-full py-8 px-4 sm:px-6 flex flex-col items-center">
+      <div class="w-full max-w-3xl flex flex-col gap-6">
+        <div class="flex items-center justify-between">
+          <a href="#ticket-queue" class="inline-flex items-center gap-1 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors group">
+            <span class="material-symbols-outlined text-[16px] group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
+            <span>Back to Active Ticket Queue</span>
+          </a>
+          <div class="flex items-center gap-1.5 font-code text-xs text-outline px-3 py-1 rounded bg-surface-container-low">
+            <span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
+            <span>GATEWAY #04 • ACTIVE ROUTING</span>
+          </div>
+        </div>
+
+        <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm p-6 sm:p-8 flex flex-col gap-6">
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed">Support Dispatch</span>
+              <span class="font-code text-xs text-outline">TKT-GEN-V4</span>
+            </div>
+            <h1 class="text-2xl font-bold tracking-tight text-on-surface mt-1">Submit a ticket request</h1>
+            <p class="text-sm text-on-surface-variant">Provide detailed context for engineering triage and specialist routing.</p>
+          </div>
+
+          <form id="create-ticket-form" onsubmit="event.preventDefault(); handleTicketSubmit();" class="flex flex-col gap-6">
+            <div class="flex flex-col gap-2">
+              <label class="text-xs font-semibold uppercase tracking-wider text-on-surface">Incident Category <span class="text-error">*</span></label>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5" id="category-pill-group">
+                <button type="button" data-category="Technical Incident" class="cat-pill active flex items-center gap-2 p-3 rounded-xl bg-primary text-white text-left transition-all shadow-sm">
+                  <span class="material-symbols-outlined text-[18px]">bug_report</span>
+                  <span class="text-xs font-semibold flex-1 truncate">Technical Incident</span>
+                  <span class="material-symbols-outlined text-[16px]">check</span>
+                </button>
+                <button type="button" data-category="Voice Bridge / Audio" class="cat-pill flex items-center gap-2 p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container text-left transition-all">
+                  <span class="material-symbols-outlined text-[18px] text-outline">graphic_eq</span>
+                  <span class="text-xs font-semibold flex-1 truncate">Voice Bridge / Audio</span>
+                </button>
+                <button type="button" data-category="Authentication & SSO" class="cat-pill flex items-center gap-2 p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container text-left transition-all">
+                  <span class="material-symbols-outlined text-[18px] text-outline">passkey</span>
+                  <span class="text-xs font-semibold flex-1 truncate">Authentication & SSO</span>
+                </button>
+                <button type="button" data-category="API & Webhooks" class="cat-pill flex items-center gap-2 p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container text-left transition-all">
+                  <span class="material-symbols-outlined text-[18px] text-outline">webhook</span>
+                  <span class="text-xs font-semibold flex-1 truncate">API & Webhooks</span>
+                </button>
+                <button type="button" data-category="Billing & Invoicing" class="cat-pill flex items-center gap-2 p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container text-left transition-all">
+                  <span class="material-symbols-outlined text-[18px] text-outline">receipt_long</span>
+                  <span class="text-xs font-semibold flex-1 truncate">Billing & Invoicing</span>
+                </button>
+                <button type="button" data-category="Account Permissions" class="cat-pill flex items-center gap-2 p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container text-left transition-all">
+                  <span class="material-symbols-outlined text-[18px] text-outline">badge</span>
+                  <span class="text-xs font-semibold flex-1 truncate">Account Permissions</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label for="ticket-subject" class="text-xs font-semibold uppercase tracking-wider text-on-surface">Subject <span class="text-error">*</span></label>
+              <div class="relative flex items-center">
+                <span class="material-symbols-outlined absolute left-3.5 text-outline text-[20px]">flag</span>
+                <input id="ticket-subject" class="w-full pl-11 pr-4 py-2.5 bg-surface-container-low text-on-surface rounded-xl text-sm focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary focus:outline-none transition-all" placeholder="e.g., Unrecognized charge on card ending in 4242" required type="text"/>
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-2">
+              <label class="text-xs font-semibold uppercase tracking-wider text-on-surface">Urgency & Impact <span class="text-error">*</span></label>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5" id="priority-card-group">
+                <div data-priority="low" class="prio-card cursor-pointer p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container transition-all">
+                  <div class="flex items-center justify-between"><span class="text-xs font-bold">Low</span><span class="w-2.5 h-2.5 rounded-full bg-outline"></span></div>
+                  <span class="text-[11px] text-on-surface-variant block mt-1">General • 24h</span>
+                </div>
+                <div data-priority="medium" class="prio-card cursor-pointer p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container transition-all">
+                  <div class="flex items-center justify-between"><span class="text-xs font-bold">Medium</span><span class="w-2.5 h-2.5 rounded-full bg-tertiary-container"></span></div>
+                  <span class="text-[11px] text-on-surface-variant block mt-1">Degraded • 4h</span>
+                </div>
+                <div data-priority="high" class="prio-card active cursor-pointer p-3 rounded-xl bg-primary text-white transition-all shadow-sm">
+                  <div class="flex items-center justify-between"><span class="text-xs font-bold">High</span><span class="w-2.5 h-2.5 rounded-full bg-white"></span></div>
+                  <span class="text-[11px] text-on-primary-container block mt-1">Critical • &lt; 30m</span>
+                </div>
+                <div data-priority="critical" class="prio-card cursor-pointer p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container transition-all">
+                  <div class="flex items-center justify-between"><span class="text-xs font-bold text-error">Critical</span><span class="w-2.5 h-2.5 rounded-full bg-error"></span></div>
+                  <span class="text-[11px] text-on-surface-variant block mt-1">Outage • &lt; 5m</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <div class="flex items-center justify-between">
+                <label for="ticket-desc" class="text-xs font-semibold uppercase tracking-wider text-on-surface">Description <span class="text-error">*</span></label>
+                <span id="ticket-desc-count" class="font-code text-xs text-outline">0 / 2,000</span>
+              </div>
+              <textarea id="ticket-desc" oninput="updateCharCount()" placeholder="e.g. I encountered an error while trying to process transaction... Steps to reproduce: 1. Click dispute, 2. Enter card number..." class="w-full p-3.5 bg-surface-container-low text-on-surface rounded-xl text-sm focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary focus:outline-none transition-all resize-y min-h-[120px] placeholder:text-outline/50 placeholder:italic" required rows="4"></textarea>
+            </div>
+
+            <div class="flex items-center justify-between p-4 rounded-xl bg-surface-container-low">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-secondary-container/40 flex items-center justify-center text-on-secondary-container">
+                  <span class="material-symbols-outlined text-[22px]">phone_in_talk</span>
+                </div>
+                <div>
+                  <span class="text-sm font-semibold text-on-surface block">Direct Voice Bridge Escalation</span>
+                  <span class="text-xs text-on-surface-variant">Launch live voice call immediately upon ticket submission.</span>
+                </div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input id="escalation-toggle" checked class="sr-only peer" type="checkbox"/>
+                <div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-secondary"></div>
+              </label>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+              <button onclick="saveTicketDraft()" type="button" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-surface-container-low text-on-surface font-semibold text-xs hover:bg-surface-container transition-all flex items-center justify-center gap-1.5">
+                <span class="material-symbols-outlined text-[18px]">bookmark</span>
+                <span>Save as Draft</span>
+              </button>
+              <button id="ticket-submit-btn" type="submit" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-primary text-white font-semibold text-xs shadow-md hover:bg-primary-container transition-all flex items-center justify-center gap-2 group">
+                <span>Create Ticket & Route to Specialist</span>
+                <span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- VIEW 4: TICKET QUEUE & INQUIRIES (#ticket-queue) - MAIN HUB            -->
+    <!-- ======================================================================= -->
+    <div id="view-ticket-queue" class="view-panel hidden flex-1 flex overflow-hidden">
+      <aside class="hidden xl:flex w-72 bg-surface-container-low border-r border-outline-variant/30 flex-col py-5 px-3 shrink-0">
+        <div class="flex flex-col gap-4">
+          <span class="px-3 font-semibold text-[11px] uppercase tracking-wider text-outline">Operations Console</span>
+          <nav class="flex flex-col gap-1">
+            <a href="#ticket-queue" class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-primary text-white font-semibold text-xs shadow-sm">
+              <span class="material-symbols-outlined text-[20px]">inbox</span>
+              <span>Ticket Queue & Inquiries</span>
+            </a>
+            <a href="#ticket-queue" onclick="showToast('Recordings', 'Encrypted call logs available on demand.', 'info')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
+              <span class="material-symbols-outlined text-[20px]">record_voice_over</span>
+              <span>Call Transcripts</span>
+            </a>
+            <a href="#ticket-queue" onclick="showToast('Settings', 'Audio downsampling & hardware profiles verified.', 'info')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
+              <span class="material-symbols-outlined text-[20px]">tune</span>
+              <span>Settings & Audio Devices</span>
+            </a>
+          </nav>
+        </div>
+      </aside>
+
+      <div class="flex-1 flex flex-col overflow-y-auto p-4 sm:p-6">
+        <div class="w-full max-w-7xl mx-auto flex flex-col gap-6">
+          <div class="w-full bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm p-5 sm:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed">
+                  Operations Dispatch
+                </span>
+                <span id="queue-count-badge" class="font-code text-xs text-outline font-semibold">0 Active</span>
+              </div>
+              <h1 class="text-2xl font-bold tracking-tight text-on-surface">Ticket Queue & Inquiries</h1>
+              <p class="text-xs text-on-surface-variant mt-0.5">Select any incident to launch its dedicated voice triage and chat troubleshooting session.</p>
+            </div>
+
+            <button onclick="navigateTo('#create-ticket')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-white font-semibold text-xs shadow-md transition-all active:scale-95 shrink-0">
+              <span class="material-symbols-outlined text-[18px]">add</span>
+              <span>Create a New Ticket</span>
+            </button>
+          </div>
+
+          <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden flex flex-col">
+            <div class="p-4 bg-surface-container-low border-b border-outline-variant/20 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px] text-outline">table_rows</span>
+                <span class="text-xs font-bold uppercase tracking-wider text-on-surface">Recorded Telemetry Incidents</span>
+              </div>
+              <button onclick="fetchTicketQueue()" class="text-xs text-primary font-semibold hover:underline flex items-center gap-1">
+                <span class="material-symbols-outlined text-[16px]">refresh</span>
+                <span>Refresh Queue</span>
+              </button>
+            </div>
+
+            <div id="ticket-queue-list" class="divide-y divide-outline-variant/20 flex flex-col">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- VIEW 5: TICKET CHAT & VOICE SESSION (#live-room)                       -->
+    <!-- Only accessible by clicking into a specific ticket                     -->
+    <!-- ======================================================================= -->
+    <div id="view-live-room" class="view-panel hidden flex-1 flex overflow-hidden">
+      <aside class="hidden xl:flex w-72 bg-surface-container-low border-r border-outline-variant/30 flex-col justify-between py-5 px-3 shrink-0">
+        <div class="flex flex-col gap-4">
+          <span class="px-3 font-semibold text-[11px] uppercase tracking-wider text-outline">Session Navigation</span>
+          <nav class="flex flex-col gap-1">
+            <!-- Back to Queue Action -->
+            <a href="#ticket-queue" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-primary hover:bg-surface-container-high transition-colors font-bold text-xs bg-primary/5">
+              <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+              <span>Return to Ticket Queue</span>
+            </a>
+            <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-primary text-white font-semibold text-xs shadow-sm mt-1">
+              <span class="material-symbols-outlined text-[20px]">headset_mic</span>
+              <span id="sidebar-active-ticket-label">Active Ticket Session</span>
+            </div>
+            <a href="#ticket-queue" onclick="showToast('Recordings', 'Archive encrypted under SOC-2 parameters.', 'info')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
+              <span class="material-symbols-outlined text-[20px]">record_voice_over</span>
+              <span>Call Transcripts</span>
+            </a>
+            <a href="#ticket-queue" onclick="showToast('Audio Settings', 'Headset 16kHz PCM downsampler active.', 'info')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
+              <span class="material-symbols-outlined text-[20px]">tune</span>
+              <span>Settings & Audio Devices</span>
+            </a>
+          </nav>
+        </div>
+
+        <div class="bg-surface-container-lowest rounded-xl p-3.5 border border-outline-variant/30 shadow-sm flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-outline">Telemetry</span>
+            <span class="flex items-center gap-1 text-secondary font-code text-xs font-semibold">
+              <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+              <span id="sidebar-ping">18ms</span>
+            </span>
+          </div>
+          <div class="flex items-center justify-between pt-1">
+            <div class="flex items-center gap-1.5 text-on-surface-variant">
+              <span class="material-symbols-outlined text-[16px] text-secondary">mic</span>
+              <span class="text-xs">Microphone</span>
+            </div>
+            <span id="mic-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded bg-surface-container text-outline">Standby</span>
+          </div>
+        </div>
+      </aside>
+
+      <div class="flex-1 flex flex-col overflow-hidden p-4 sm:p-6">
+        <div class="w-full max-w-7xl mx-auto flex-1 flex flex-col gap-4 overflow-hidden">
+
+          <!-- Breadcrumb Link Back to Queue -->
+          <div class="flex items-center justify-between shrink-0">
+            <a href="#ticket-queue" class="inline-flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors">
+              <span class="material-symbols-outlined text-[16px]">arrow_back</span>
+              <span>Back to Ticket Queue</span>
+            </a>
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] text-outline font-code">BOUND INCIDENT:</span>
+              <span id="session-ticket-badge" class="px-2 py-0.5 rounded bg-primary-fixed text-on-primary-fixed font-code font-bold text-xs">--</span>
+            </div>
+          </div>
+
+          <!-- Top Voice Call Ribbon -->
+          <div class="w-full bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm p-4 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-4 relative overflow-hidden shrink-0">
+            <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-secondary"></div>
+            <div class="flex items-center gap-3.5 pl-1">
+              <div class="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center shrink-0">
+                <span class="material-symbols-outlined material-symbols-filled text-[20px]">phone_in_talk</span>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-bold text-on-surface">Live Specialist Bridge Ready</span>
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[11px] font-semibold">
+                    <span class="w-1.5 h-1.5 rounded-full bg-secondary animate-ping"></span>
+                    Direct Triage
+                  </span>
+                </div>
+                <p class="text-xs text-on-surface-variant mt-0.5">AI Assistant is loaded with this ticket's parameters. Start direct full-duplex voice call anytime.</p>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+              <button id="directCallBtn" onclick="toggleVoiceBridge()" type="button" class="group flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white font-semibold text-xs shadow-md hover:bg-primary-container active:scale-95 transition-all">
+                <span class="material-symbols-outlined material-symbols-filled text-[18px]">call</span>
+                <span id="directCallBtnText">Start Direct Voice Call</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Main Split Stage -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0 overflow-hidden">
+            <!-- Chat Feed (8 Cols) -->
+            <div class="lg:col-span-8 flex flex-col bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden min-h-0">
+              <div class="p-4 bg-surface-container-low border-b border-outline-variant/20 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-3">
+                  <div class="relative">
+                    <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-xs ring-2 ring-surface-container-lowest">
+                      ER
+                    </div>
+                    <span class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-secondary ring-2 ring-white"></span>
+                  </div>
+                  <div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-sm font-bold text-on-surface">AI Support</span>
+                      <span class="material-symbols-outlined material-symbols-filled text-[16px] text-primary">verified</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 text-on-surface-variant text-xs">
+                      <span>Automated AI</span>
+                      <span>•</span>
+                      <span class="text-secondary font-semibold">AssemblyAI Voice Core</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-1">
+                  <button onclick="sendManualInterrupt()" title="Trigger Voice Barge-in" class="px-2.5 py-1 rounded-lg bg-surface-container text-xs font-semibold text-on-surface-variant hover:bg-surface-container-high transition-colors flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[16px]">front_hand</span>
+                    <span class="hidden sm:inline">Barge-in</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Voice Cockpit Strip -->
+              <div id="voiceSessionCockpit" class="hidden bg-secondary-container text-on-secondary-container px-4 py-2.5 flex items-center justify-between shrink-0 border-b border-secondary/20">
+                <div class="flex items-center gap-3">
+                  <span class="w-2.5 h-2.5 rounded-full bg-secondary animate-ping"></span>
+                  <div>
+                    <span id="voiceCallStatusText" class="text-xs font-bold block">Live Voice Bridge Connected</span>
+                    <span class="font-code text-[11px] text-on-secondary-fixed-variant">16kHz Int16 PCM • Full Duplex Single-Socket</span>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3">
+                  <canvas id="cockpitCanvas" width="120" height="24" class="rounded bg-secondary/10"></canvas>
+                  <button onclick="toggleVoiceBridge()" class="px-3 py-1 rounded-lg bg-error text-white font-semibold text-xs shadow-sm hover:bg-red-700 transition-colors">
+                    End Call
+                  </button>
+                </div>
+              </div>
+
+              <!-- Messages Container -->
+              <div id="chatStream" class="flex-1 p-4 sm:p-6 flex flex-col gap-4 overflow-y-auto">
+                <!-- Dynamically populated per ticket by app.js -->
+                <div id="typingIndicator" class="hidden items-center gap-2 text-outline pl-10">
+                  <span class="w-1.5 h-1.5 rounded-full bg-outline animate-bounce"></span>
+                  <span class="w-1.5 h-1.5 rounded-full bg-outline animate-bounce delay-100"></span>
+                  <span class="w-1.5 h-1.5 rounded-full bg-outline animate-bounce delay-200"></span>
+                  <span id="typingText" class="text-xs ml-1">Elena is speaking...</span>
+                </div>
+              </div>
+
+              <!-- Chat Input -->
+              <div class="p-3 sm:p-4 bg-surface-container-lowest border-t border-outline-variant/20 shrink-0">
+                <form id="chatForm" onsubmit="event.preventDefault(); sendTextMessage();" class="flex flex-col gap-1.5">
+                  <div class="flex items-center gap-2 bg-surface-container-low rounded-xl px-3.5 py-1.5 focus-within:bg-surface-container-lowest focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+                    <input id="chatInput" class="w-full bg-transparent text-on-surface text-sm placeholder:text-outline focus:outline-none" placeholder="Type your response or prompt Elena..." type="text"/>
+                    <button type="submit" class="p-2 rounded-lg bg-primary text-white hover:bg-primary-container active:scale-95 transition-all shrink-0">
+                      <span class="material-symbols-outlined text-[18px]">send</span>
+                    </button>
+                  </div>
+                  <div class="flex items-center justify-between text-outline text-[11px] px-1">
+                    <span class="font-code">WebSocket Live Duplex</span>
+                    <span class="text-secondary font-medium flex items-center gap-1">
+                      <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> Ticket Bound
+                    </span>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <!-- Telemetry Sidebar (4 Cols) -->
+            <div class="lg:col-span-4 flex flex-col gap-4 overflow-y-auto">
+              <!-- Active Ticket Card -->
+              <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-4 sm:p-5 shadow-sm flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-outline">Incident Context</span>
+                  <span id="ticket-id-tag" class="px-2 py-0.5 rounded bg-surface-container-high text-primary font-code text-xs font-semibold">--</span>
+                </div>
+                <div>
+                  <h3 id="ticket-title-display" class="font-bold text-sm text-on-surface">--</h3>
+                  <p id="ticket-desc-display" class="text-xs text-on-surface-variant mt-0.5">--</p>
+                </div>
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                  <div class="bg-surface-container-low rounded-xl p-2.5 flex flex-col">
+                    <span class="text-[10px] text-outline uppercase font-semibold">Priority</span>
+                    <span id="ticket-priority-display" class="text-xs font-bold text-error flex items-center gap-1 mt-0.5">
+                      <span class="w-2 h-2 rounded-full bg-error"></span> High
+                    </span>
+                  </div>
+                  <div class="bg-surface-container-low rounded-xl p-2.5 flex flex-col">
+                    <span class="text-[10px] text-outline uppercase font-semibold">Assigned Desk</span>
+                    <span id="ticket-desk-display" class="text-xs font-bold text-on-surface mt-0.5">--</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tool Telemetry Inspector -->
+              <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-4 sm:p-5 shadow-sm flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-[18px] text-primary">terminal</span>
+                    <span class="text-xs font-bold uppercase tracking-wider text-on-surface">Tool Call Telemetry</span>
+                  </div>
+                  <span id="tool-counter-badge" class="font-code text-[11px] text-outline">0 calls</span>
+                </div>
+                <div id="tool-telemetry-container" class="flex flex-col gap-2 max-h-56 overflow-y-auto">
+                  <div class="text-xs text-outline italic text-center py-4">Awaiting function calls (e.g., lookup_transaction, freeze_card)...</div>
+                </div>
+              </div>
+
+              <!-- Audio Diagnostics -->
+              <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-4 sm:p-5 shadow-sm flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-on-surface">Audio Diagnostics</span>
+                  <span class="material-symbols-outlined material-symbols-filled text-secondary text-[18px]">check_circle</span>
+                </div>
+                <div class="space-y-2 text-xs">
+                  <div class="flex items-center justify-between text-on-surface-variant">
+                    <span>Input Driver</span>
+                    <span class="font-semibold text-on-surface">16kHz Int16 Mono PCM</span>
+                  </div>
+                  <div class="flex items-center justify-between text-on-surface-variant">
+                    <span>VAD Gate / Energy</span>
+                    <span id="mic-energy-meter" class="font-code text-secondary font-semibold">0.0 RMS</span>
+                  </div>
+                  <div class="w-full bg-surface-container-high rounded-full h-1.5 overflow-hidden">
+                    <div id="mic-energy-bar" class="bg-secondary h-full w-0 transition-all duration-75"></div>
+                  </div>
+                </div>
+                <button onclick="testMicHardware()" id="testMicBtn" class="w-full py-2 px-3 rounded-xl bg-surface-container-low hover:bg-surface-container font-semibold text-xs text-on-surface transition-colors">
+                  Test Microphone Input
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="w-full bg-surface-container-lowest border-t border-outline-variant/30 py-3 px-6 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-on-surface-variant">
+    <div class="flex items-center gap-3">
+      <span>© 2026 OmniPulse Global Support Operations.</span>
+      <span>•</span>
+      <!-- <span class="font-code text-[11px] text-outline">v4.18.2-prod</span> -->
+    </div>
+    <div class="flex items-center gap-4 text-xs font-medium">
+      <!-- <a href="#ticket-queue" onclick="showToast('Security Policy', 'SOC-2 Type II audit report available on demand.', 'info')" class="hover:text-primary transition-colors">Security Policy</a> -->
+      <!-- <a href="#ticket-queue" onclick="showToast('Trust Center', 'All endpoints encrypted via TLS 1.3 + WSS.', 'info')" class="hover:text-primary transition-colors">Trust Center</a> -->
+      <!-- <a href="tel:18006664457" class="hover:text-primary transition-colors">Incident Hotline</a> -->
+    </div>
+  </footer>
+
+  <script src="/static/js/audio.js"></script>
+  <script src="/static/js/app.js"></script>
 </body>
 </html>

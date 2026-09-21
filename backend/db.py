@@ -49,6 +49,22 @@ def init_db():
         if "status" not in existing_columns:
             conn.execute("ALTER TABLE tickets ADD COLUMN status TEXT NOT NULL DEFAULT 'OPEN'")
 
+        # Call transcripts, kept permanently — never cleared on session end or
+        # navigation. ticket_code links a transcript line back to the ticket
+        # it was recorded under (a call is always tied to the caller's most
+        # recent ticket; see server.py's voice_relay).
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS transcripts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_code TEXT NOT NULL,
+                user_email TEXT NOT NULL,
+                role TEXT NOT NULL,
+                text TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_transcripts_ticket ON transcripts(ticket_code)")
+
         conn.commit()
 
 def hash_password(password: str, salt_bytes: bytes = None) -> tuple[str, str]:
@@ -177,6 +193,30 @@ def get_tickets(user_email: Optional[str] = None, status: Optional[str] = None):
             for r in rows
         ]
 
+def get_ticket_by_code(ticket_code: str) -> Optional[Dict[str, Any]]:
+    """ticket_code may be passed with or without its leading '#'."""
+    code_clean = ticket_code.lstrip("#").strip()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT ticket_code, subject, description, category, priority, assigned_desk, status, created_at
+               FROM tickets WHERE ticket_code = ?""",
+            (code_clean,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return {
+            "ticket_id": f"#{row['ticket_code']}",
+            "subject": row["subject"],
+            "description": row["description"],
+            "category": row["category"],
+            "priority": row["priority"],
+            "assigned_desk": row["assigned_desk"],
+            "status": row["status"],
+            "created_at": row["created_at"],
+        }
+
 def get_latest_ticket_for_user(user_email: str) -> Optional[Dict[str, Any]]:
     with get_db() as conn:
         cursor = conn.cursor()
@@ -233,5 +273,24 @@ def update_ticket_status(ticket_id: str, status: str) -> Optional[Dict[str, Any]
             "status": row["status"],
             "created_at": row["created_at"],
         }
+
+def save_transcript_line(ticket_code: str, user_email: str, role: str, text: str) -> None:
+    """Persists one transcript line permanently. Never deleted on session end,
+    disconnect, or navigation — only ever appended to."""
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO transcripts (ticket_code, user_email, role, text) VALUES (?, ?, ?, ?)",
+            (ticket_code.lstrip("#").strip(), user_email.strip().lower(), role, text),
+        )
+        conn.commit()
+
+def get_transcripts_for_ticket(ticket_code: str):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT role, text, created_at FROM transcripts WHERE ticket_code = ? ORDER BY id ASC",
+            (ticket_code.lstrip("#").strip(),),
+        )
+        return [{"role": r["role"], "text": r["text"], "created_at": r["created_at"]} for r in cursor.fetchall()]
 
 init_db()

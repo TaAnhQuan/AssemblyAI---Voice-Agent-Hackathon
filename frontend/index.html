@@ -399,10 +399,6 @@
               <span class="material-symbols-outlined text-[20px]">inbox</span>
               <span>Ticket Queue & Inquiries</span>
             </a>
-            <a href="#ticket-queue" @click="showToast('Recordings', 'Encrypted call logs available on demand.', 'info')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
-              <span class="material-symbols-outlined text-[20px]">record_voice_over</span>
-              <span>Call Transcripts</span>
-            </a>
             <a href="#settings" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
               <span class="material-symbols-outlined text-[20px]">tune</span>
               <span>Settings & Audio Devices</span>
@@ -666,10 +662,6 @@
               <span class="material-symbols-outlined text-[20px]">inbox</span>
               <span>Ticket Queue & Inquiries</span>
             </a>
-            <a href="#ticket-queue" @click="showToast('Recordings', 'Encrypted call logs available on demand.', 'info')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
-              <span class="material-symbols-outlined text-[20px]">record_voice_over</span>
-              <span>Call Transcripts</span>
-            </a>
             <a href="#settings" class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-primary text-on-primary font-semibold text-xs shadow-sm">
               <span class="material-symbols-outlined text-[20px]">tune</span>
               <span>Settings & Audio Devices</span>
@@ -738,7 +730,7 @@
                   </div>
                 </div>
 
-                <button @click="testMicHardware()" :class="micTestBtnClass()" x-text="micTest.label">
+                <button @click="testMicHardware()" :disabled="voice.connected" :class="micTestBtnClass()" x-text="micTest.label">
                   Test Microphone Input
                 </button>
               </div>
@@ -826,10 +818,6 @@
               <span class="material-symbols-outlined text-[20px]">headset_mic</span>
               <span>Active Ticket Session</span>
             </div>
-            <a href="#ticket-queue" @click="showToast('Recordings', 'Archive encrypted under SOC-2 parameters.', 'info')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
-              <span class="material-symbols-outlined text-[20px]">record_voice_over</span>
-              <span>Call Transcripts</span>
-            </a>
             <a href="#settings" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
               <span class="material-symbols-outlined text-[20px]">tune</span>
               <span>Settings & Audio Devices</span>
@@ -1098,7 +1086,7 @@
                 <div class="space-y-2 text-xs">
                   <div class="flex items-center justify-between text-on-surface-variant">
                     <span>Input Driver</span>
-                    <span class="font-semibold text-on-surface">24kHz Int16 Mono PCM</span>
+                    <span class="font-semibold text-on-surface" x-text="micDriverLabel()">Not active</span>
                   </div>
                   <div class="flex items-center justify-between text-on-surface-variant">
                     <span>VAD Gate / Energy</span>
@@ -1108,7 +1096,7 @@
                     <div class="bg-secondary h-full transition-all duration-75" :style="`width: ${Math.min(100, voice.rms * 1.8)}%`"></div>
                   </div>
                 </div>
-                <button @click="testMicHardware()" :class="micTestBtnClass()" x-text="micTest.label">
+                <button @click="testMicHardware()" :disabled="voice.connected" :class="micTestBtnClass()" x-text="micTest.label">
                   Test Microphone Input
                 </button>
               </div>

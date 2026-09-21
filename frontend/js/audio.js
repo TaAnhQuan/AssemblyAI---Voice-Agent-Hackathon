@@ -9,6 +9,7 @@ class VoiceAudioEngine {
     this.micStream = null;
     this.processorNode = null;
     this.analyserNode = null;
+    this.micAnalyserNode = null;
     this.activeSources = [];
     this.nextStartTime = 0;
     this.isAgentSpeaking = false;
@@ -19,9 +20,24 @@ class VoiceAudioEngine {
       this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({
         sampleRate: this.sampleRate,
       });
+    }
+
+    // Covers both the freshly-created context above and a reused one left
+    // suspended by a previous stop() — either way, it needs to be running
+    // before nodes attached to it will actually process audio.
+    if (this.audioCtx.state !== "running") {
       await this.audioCtx.resume();
     }
 
+    // Two separate analysers: micAnalyserNode taps the live mic signal for
+    // the RMS meter only and is never connected to destination, so the
+    // caller's own voice is captured but never played back to them.
+    // analyserNode taps agent playback and IS connected to destination
+    // (below, in playPcmChunk) so the spectrum visualizer can react to it.
+    if (!this.micAnalyserNode) {
+      this.micAnalyserNode = this.audioCtx.createAnalyser();
+      this.micAnalyserNode.fftSize = 256;
+    }
     if (!this.analyserNode) {
       this.analyserNode = this.audioCtx.createAnalyser();
       this.analyserNode.fftSize = 256;
@@ -60,6 +76,17 @@ class VoiceAudioEngine {
     }));
   }
 
+  /**
+   * Returns the actual negotiated settings (sample rate, channel count, label,
+   * etc.) of the live microphone track, straight from the browser — not our
+   * requested constraints, since hardware/OS can coerce those. Null when no
+   * mic is currently open.
+   */
+  getTrackSettings() {
+    const track = this.micStream?.getAudioTracks?.()[0];
+    return track ? track.getSettings() : null;
+  }
+
   async startMicrophone(onAudioChunk, onRmsUpdate, deviceId = null) {
     await this.initialize();
 
@@ -75,7 +102,7 @@ class VoiceAudioEngine {
     });
 
     const micSource = this.audioCtx.createMediaStreamSource(this.micStream);
-    micSource.connect(this.analyserNode);
+    micSource.connect(this.micAnalyserNode);
 
     // 2048 samples @ 24kHz = ~85ms frames
     this.processorNode = this.audioCtx.createScriptProcessor(2048, 1, 1);
@@ -164,11 +191,16 @@ class VoiceAudioEngine {
       this.micStream.getTracks().forEach((track) => track.stop());
       this.micStream = null;
     }
-    if (this.audioCtx && this.audioCtx.state !== "closed") {
-      this.audioCtx.close();
-      this.audioCtx = null;
+    // Deliberately NOT closing/nulling audioCtx here: closing and recreating
+    // a new AudioContext on every start/stop cycle (mic test, hang up,
+    // reconnect, ...) is fragile — some browsers throttle repeated
+    // AudioContext construction, and audioCtx.resume() on a freshly
+    // recreated context can hang indefinitely. Suspending and reusing the
+    // same context across the whole page session is the recommended,
+    // reliable pattern; initialize() already no-ops once it exists.
+    if (this.audioCtx && this.audioCtx.state === "running") {
+      this.audioCtx.suspend();
     }
-    this.analyserNode = null;
     this.nextStartTime = 0;
   }
 
@@ -202,4 +234,4 @@ class VoiceAudioEngine {
   }
 }
 
-window.VoiceEngine = new VoiceAudioEngine(16000);
+window.VoiceEngine = new VoiceAudioEngine(24000);

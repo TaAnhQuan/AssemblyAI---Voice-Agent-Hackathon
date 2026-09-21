@@ -61,6 +61,10 @@ document.addEventListener("alpine:init", () => {
       ws: null,
       micBadge: "Standby",
       rms: 0,
+      // The mic's actual negotiated MediaStreamTrack settings (sample rate,
+      // channel count, etc.) — set the instant the track opens so the Audio
+      // Diagnostics panel reports real live hardware behavior, not a guess.
+      micInfo: null,
       toolCallsCount: 0,
       // Set by the server's persona_info event once connected, based on the
       // bound ticket's category (e.g. "Elena" for Billing, "Kai" for Technical).
@@ -150,7 +154,7 @@ document.addEventListener("alpine:init", () => {
       this.view = hash.replace("#", "");
 
       if (hash === "#live-room") {
-        this.fetchLatestTicket();
+        this.fetchLatestTicket().then(() => this.loadTranscriptHistory());
         this.detectMicrophones();
       } else if (hash === "#ticket-queue") {
         this.fetchTicketQueue();
@@ -244,6 +248,35 @@ document.addEventListener("alpine:init", () => {
 
     isHighPriority(priority) {
       return /HIGH|CRITICAL/i.test(priority || "");
+    },
+
+    // Transcripts are persisted permanently in SQLite (see backend db.py) and
+    // are never cleared on session end or navigation — this repopulates the
+    // chat view with everything on record for the active ticket, so history
+    // survives reloads and screen changes instead of living only in memory.
+    async loadTranscriptHistory() {
+      this.messages = [];
+      const code = this.currentTicket?.ticket_id;
+      if (!code) return;
+      try {
+        const res = await fetch(`/api/tickets/${encodeURIComponent(code.replace(/^#/, ""))}/transcripts`);
+        if (!res.ok) return;
+        const data = await res.json();
+        (data.transcripts || []).forEach((t) => {
+          this.messages.push({
+            id: Date.now() + Math.random(),
+            sender: t.role === "agent" ? this.voice.personaName : "You",
+            text: t.text,
+            role: t.role,
+            time: t.created_at
+              ? new Date(t.created_at + "Z").toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+              : "",
+          });
+        });
+        this.$nextTick(() => this.scrollChatToBottom());
+      } catch (err) {
+        console.error("[Transcript History Error]:", err);
+      }
     },
 
     // ===================================================================
@@ -444,8 +477,12 @@ document.addEventListener("alpine:init", () => {
         // The bound ticket's category picks which persona (name/voice/system
         // prompt/tools) the backend loads for this call — see PERSONAS in server.py.
         const category = this.currentTicket?.category || "";
-        const categoryParam = category ? `?category=${encodeURIComponent(category)}` : "";
-        const wsUrl = `${protocol}//${window.location.host}/ws/voice${categoryParam}`;
+        const params = new URLSearchParams();
+        if (category) params.set("category", category);
+        if (this.currentTicket?.ticket_id) params.set("ticket", this.currentTicket.ticket_id.replace(/^#/, ""));
+        if (this.currentUser?.email) params.set("email", this.currentUser.email);
+        const query = params.toString();
+        const wsUrl = `${protocol}//${window.location.host}/ws/voice${query ? `?${query}` : ""}`;
         const socket = new WebSocket(wsUrl);
         socket.binaryType = "arraybuffer";
 
@@ -469,6 +506,7 @@ document.addEventListener("alpine:init", () => {
             },
             this.mic.selectedId || null
           );
+          this.refreshMicInfo();
 
           this.$nextTick(() => {
             const canvas = document.getElementById("cockpitCanvas");
@@ -513,6 +551,7 @@ document.addEventListener("alpine:init", () => {
       this.voice.connected = false;
       this.voice.connecting = false;
       if (window.VoiceEngine) window.VoiceEngine.stop();
+      this.refreshMicInfo();
       this.toggleTypingIndicator(false);
 
       if (this.voice.userHangup) {
@@ -552,6 +591,7 @@ document.addEventListener("alpine:init", () => {
       this.voice.rms = 0;
 
       if (window.VoiceEngine) window.VoiceEngine.stop();
+      this.refreshMicInfo();
       this.toggleTypingIndicator(false);
     },
 
@@ -581,9 +621,14 @@ document.addEventListener("alpine:init", () => {
         this.showToast("Barge-In Detected", "Specialist speech yielded to caller.", "info");
       } else if (data.type === "session_ended") {
         // A real, intentional end reported by the backend (e.g. AssemblyAI
-        // closed the session, or it never started) — don't auto-reconnect.
+        // closed the session, the agent decided to hang up, or it never
+        // started) — don't auto-reconnect.
         this.voice.userHangup = true;
-        this.showToast("Call Ended", data.reason || "The voice session ended.", "info");
+        if (data.reason === "agent_hangup") {
+          this.showToast("Call Ended", `${this.voice.personaName} ended the call.`, "info");
+        } else {
+          this.showToast("Call Ended", data.reason || "The voice session ended.", "info");
+        }
       } else if (data.type === "voice_warning") {
         this.showToast("Voice Warning", data.message || "AssemblyAI reported a warning.", "info");
       }
@@ -823,25 +868,59 @@ document.addEventListener("alpine:init", () => {
       return this.currentUser ? this.currentUser.name : "Guest";
     },
 
-    testMicHardware() {
+    // Runs the real capture engine (not a throwaway getUserMedia call) so the
+    // RMS meter and Input Driver line show the mic's actual live behavior,
+    // not a canned animation. Blocked during an active call since that's
+    // already using the one microphone engine instance.
+    async testMicHardware() {
+      if (this.voice.connected || this.micTest.variant === "listening") return;
+
       this.micTest = { label: "Listening... Speak now", variant: "listening" };
 
-      const constraints = this.mic.selectedId ? { deviceId: { exact: this.mic.selectedId } } : true;
+      try {
+        await window.VoiceEngine.startMicrophone(
+          () => {}, // test only — captured audio isn't sent anywhere
+          (rms) => {
+            this.voice.rms = rms;
+          },
+          this.mic.selectedId || null
+        );
+        this.refreshMicInfo();
 
-      navigator.mediaDevices
-        .getUserMedia({ audio: constraints })
-        .then((stream) => {
+        setTimeout(() => {
+          window.VoiceEngine.stop();
+          this.voice.rms = 0;
+          this.refreshMicInfo();
+          this.micTest = { label: "Microphone Verified (OK)", variant: "ok" };
           setTimeout(() => {
-            stream.getTracks().forEach((t) => t.stop());
-            this.micTest = { label: "Microphone Verified (OK)", variant: "ok" };
-            setTimeout(() => {
-              this.micTest = { label: "Test Microphone Input", variant: "idle" };
-            }, 2500);
-          }, 1500);
-        })
-        .catch(() => {
-          this.micTest = { label: "Permission Denied", variant: "error" };
-        });
+            this.micTest = { label: "Test Microphone Input", variant: "idle" };
+          }, 2500);
+        }, 3000);
+      } catch (err) {
+        console.error("[Mic Test Error]:", err);
+        this.micTest = { label: "Permission Denied", variant: "error" };
+      }
+    },
+
+    // Pulls the mic's actual negotiated MediaStreamTrack settings straight
+    // from the browser into reactive state, right when the track opens or
+    // closes — real hardware/OS behavior can differ from what we requested
+    // (e.g. the device may not honor 24kHz), so this reports what's live,
+    // not assumed, and updates the instant it changes rather than on the
+    // next unrelated re-render.
+    refreshMicInfo() {
+      this.voice.micInfo = window.VoiceEngine?.getTrackSettings?.() || null;
+    },
+
+    micDriverLabel() {
+      const settings = this.voice.micInfo;
+      if (!settings) return "Not active";
+
+      const rateKhz = settings.sampleRate ? Math.round(settings.sampleRate / 1000) : null;
+      const bits = settings.sampleSize || 16;
+      const channels = settings.channelCount === 1 ? "Mono" : settings.channelCount ? `${settings.channelCount}ch` : "Mono";
+
+      return `${rateKhz ? `${rateKhz}kHz` : "--"} Int${bits} ${channels} PCM`;
     },
 
     micTestBtnClass() {

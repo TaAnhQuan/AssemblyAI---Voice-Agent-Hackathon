@@ -73,6 +73,21 @@ def check_network_status(location: str) -> Dict[str, Any]:
     }
 
 
+def end_call(reason: str) -> Dict[str, Any]:
+    """
+    Ends the current support call. The agent must have already told the
+    caller it's about to hang up (e.g. summarized the resolution and said
+    goodbye) in the same turn before calling this — the relay server waits
+    for that turn's speech to finish playing before actually closing the line.
+    """
+    return {
+        "status": "success",
+        "action": "CALL_ENDED",
+        "reason": reason,
+        "message": "Call will end after this turn finishes playing.",
+    }
+
+
 def restart_connection(phone_number: str) -> Dict[str, Any]:
     """
     Remotely resets a customer's network connection/line to resolve connectivity issues.
@@ -116,6 +131,28 @@ TOOL_DEFINITIONS = [
                     },
                 },
                 "required": ["location"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "end_call",
+            "description": (
+                "Ends the current support call. Only call this AFTER you have already "
+                "told the caller, in the same reply, that the issue is resolved (or that "
+                "you're unable to help further) and said goodbye. Never call this silently "
+                "or before notifying the caller."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "description": "Short reason the call is ending, e.g. 'issue resolved' or 'caller requested to end the call'.",
+                    },
+                },
+                "required": ["reason"],
             },
         },
     },
@@ -173,6 +210,10 @@ def execute_tool(tool_name: str, arguments: Any) -> Dict[str, Any]:
                 return {"status": "error", "message": "Missing required parameter 'phone_number'."}
 
             return restart_connection(phone_number=str(args["phone_number"]))
+
+        elif tool_name == "end_call":
+            reason = str(args.get("reason") or "Call completed.")
+            return end_call(reason=reason)
 
         else:
             return {

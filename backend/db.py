@@ -4,7 +4,6 @@ backend/db.py — SQLite database driver with user and ticket persistence.
 import os
 import sqlite3
 import hashlib
-import time
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -14,6 +13,8 @@ def get_db():
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     return conn
+
+TICKET_STATUSES = {"OPEN", "CLOSED"}
 
 def init_db():
     with get_db() as conn:
@@ -37,9 +38,17 @@ def init_db():
                 category TEXT NOT NULL,
                 priority TEXT NOT NULL,
                 assigned_desk TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'OPEN',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        # Lightweight migration: older databases created before the status
+        # column existed just get it added, defaulting existing rows to OPEN.
+        existing_columns = {row["name"] for row in conn.execute("PRAGMA table_info(tickets)")}
+        if "status" not in existing_columns:
+            conn.execute("ALTER TABLE tickets ADD COLUMN status TEXT NOT NULL DEFAULT 'OPEN'")
+
         conn.commit()
 
 def hash_password(password: str, salt_bytes: bytes = None) -> tuple[str, str]:
@@ -94,16 +103,29 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
         }
 
 def create_ticket(user_email: str, subject: str, description: str, category: str, priority: str) -> Dict[str, Any]:
-    ticket_code = f"SR-{int(time.time()) % 100000}"
-    assigned_desk = "Core Auth Desk" if any(k in category for k in ["SSO", "Auth", "Permissions"]) else "Specialist Dispatch"
+    if "Billing" in category:
+        assigned_desk = "Billing Desk"
+    elif "Network" in category:
+        assigned_desk = "Network Operations"
+    elif "Account" in category:
+        assigned_desk = "Account Services"
+    else:
+        assigned_desk = "Customer Care"
 
     with get_db() as conn:
         cursor = conn.cursor()
+        # ticket_code is derived from the row's autoincrementing id (set right
+        # after insert) so ticket numbers are sequential and human-readable,
+        # instead of the old epoch-seconds-mod-100000 scheme that jumped
+        # around unpredictably and wrapped every ~27.8 hours.
         cursor.execute(
-            """INSERT INTO tickets (ticket_code, user_email, subject, description, category, priority, assigned_desk)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (ticket_code, user_email.strip().lower(), subject.strip(), description.strip(), category, priority, assigned_desk)
+            """INSERT INTO tickets (ticket_code, user_email, subject, description, category, priority, assigned_desk, status)
+               VALUES ('PENDING', ?, ?, ?, ?, ?, ?, 'OPEN')""",
+            (user_email.strip().lower(), subject.strip(), description.strip(), category, priority, assigned_desk)
         )
+        new_id = cursor.lastrowid
+        ticket_code = f"SR-{new_id:05d}"
+        cursor.execute("UPDATE tickets SET ticket_code = ? WHERE id = ?", (ticket_code, new_id))
         conn.commit()
 
     return {
@@ -113,22 +135,32 @@ def create_ticket(user_email: str, subject: str, description: str, category: str
         "category": category,
         "priority": priority,
         "assigned_desk": assigned_desk,
+        "status": "OPEN",
     }
 
-def get_tickets(user_email: Optional[str] = None):
+def get_tickets(user_email: Optional[str] = None, status: Optional[str] = None):
+    """status: "OPEN", "CLOSED", or None/"ALL" for both."""
+    status_clean = status.strip().upper() if status else None
+    if status_clean == "ALL":
+        status_clean = None
+
+    where_clauses = []
+    params: list = []
+    if user_email:
+        where_clauses.append("user_email = ?")
+        params.append(user_email.strip().lower())
+    if status_clean:
+        where_clauses.append("status = ?")
+        params.append(status_clean)
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
     with get_db() as conn:
         cursor = conn.cursor()
-        if user_email:
-            cursor.execute(
-                """SELECT ticket_code, user_email, subject, description, category, priority, assigned_desk, created_at
-                   FROM tickets WHERE user_email = ? ORDER BY id DESC""",
-                (user_email.strip().lower(),)
-            )
-        else:
-            cursor.execute(
-                """SELECT ticket_code, user_email, subject, description, category, priority, assigned_desk, created_at
-                   FROM tickets ORDER BY id DESC"""
-            )
+        cursor.execute(
+            f"""SELECT ticket_code, user_email, subject, description, category, priority, assigned_desk, status, created_at
+                FROM tickets {where_sql} ORDER BY id DESC""",
+            params,
+        )
         rows = cursor.fetchall()
         return [
             {
@@ -139,6 +171,7 @@ def get_tickets(user_email: Optional[str] = None):
                 "category": r["category"],
                 "priority": r["priority"],
                 "assigned_desk": r["assigned_desk"],
+                "status": r["status"],
                 "created_at": r["created_at"],
             }
             for r in rows
@@ -148,7 +181,7 @@ def get_latest_ticket_for_user(user_email: str) -> Optional[Dict[str, Any]]:
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            """SELECT ticket_code, subject, description, category, priority, assigned_desk, created_at
+            """SELECT ticket_code, subject, description, category, priority, assigned_desk, status, created_at
                FROM tickets WHERE user_email = ? ORDER BY id DESC LIMIT 1""",
             (user_email.strip().lower(),)
         )
@@ -162,6 +195,43 @@ def get_latest_ticket_for_user(user_email: str) -> Optional[Dict[str, Any]]:
             "category": row["category"],
             "priority": row["priority"],
             "assigned_desk": row["assigned_desk"],
+            "status": row["status"],
+        }
+
+def update_ticket_status(ticket_id: str, status: str) -> Optional[Dict[str, Any]]:
+    """Archives (CLOSED) or reopens (OPEN) a ticket. ticket_id may be passed
+    with or without its leading '#'. Returns the updated ticket, or None if
+    no ticket with that code exists."""
+    status_clean = status.strip().upper()
+    if status_clean not in TICKET_STATUSES:
+        raise ValueError(f"Invalid status '{status}'. Must be one of {sorted(TICKET_STATUSES)}.")
+
+    ticket_code = ticket_id.lstrip("#").strip()
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE tickets SET status = ? WHERE ticket_code = ?", (status_clean, ticket_code))
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            return None
+
+        cursor.execute(
+            """SELECT ticket_code, user_email, subject, description, category, priority, assigned_desk, status, created_at
+               FROM tickets WHERE ticket_code = ?""",
+            (ticket_code,),
+        )
+        row = cursor.fetchone()
+        return {
+            "ticket_id": f"#{row['ticket_code']}",
+            "user_email": row["user_email"],
+            "subject": row["subject"],
+            "description": row["description"],
+            "category": row["category"],
+            "priority": row["priority"],
+            "assigned_desk": row["assigned_desk"],
+            "status": row["status"],
+            "created_at": row["created_at"],
         }
 
 init_db()

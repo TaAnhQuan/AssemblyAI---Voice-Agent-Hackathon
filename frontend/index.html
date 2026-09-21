@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-  <title>OmniPulse Support Portal & Live Voice Bridge</title>
+  <title>Wavelink Mobile Customer Care & Live Voice Support</title>
 
   <!-- Inline Favicon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎙️</text></svg>">
@@ -17,49 +17,52 @@
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
+    // Every color resolves to a CSS custom property (defined below) instead of
+    // a fixed hex value, so light/dark theming is just swapping the variables
+    // under [data-theme="dark"] — no need to touch any dark: variant classes
+    // across the markup.
     tailwind.config = {
-      darkMode: "class",
       theme: {
         extend: {
           colors: {
-            "primary": "#3525cd",
-            "primary-container": "#4f46e5",
-            "on-primary": "#ffffff",
-            "on-primary-container": "#dad7ff",
-            "primary-fixed": "#e2dfff",
-            "primary-fixed-dim": "#c3c0ff",
-            "on-primary-fixed": "#0f0069",
-            "on-primary-fixed-variant": "#3323cc",
-            "secondary": "#006c4a",
-            "secondary-container": "#82f5c1",
-            "on-secondary": "#ffffff",
-            "on-secondary-container": "#00714e",
-            "secondary-fixed": "#85f8c4",
-            "secondary-fixed-dim": "#68dba9",
-            "on-secondary-fixed": "#002114",
-            "on-secondary-fixed-variant": "#005137",
-            "tertiary": "#004c76",
-            "tertiary-container": "#00659a",
-            "on-tertiary": "#ffffff",
-            "on-tertiary-container": "#bedfff",
-            "background": "#faf8ff",
-            "on-background": "#131b2e",
-            "surface": "#faf8ff",
-            "surface-dim": "#d2d9f4",
-            "surface-bright": "#faf8ff",
-            "surface-container-lowest": "#ffffff",
-            "surface-container-low": "#f2f3ff",
-            "surface-container": "#eaedff",
-            "surface-container-high": "#e2e7ff",
-            "surface-container-highest": "#dae2fd",
-            "on-surface": "#131b2e",
-            "on-surface-variant": "#464555",
-            "outline": "#777587",
-            "outline-variant": "#c7c4d8",
-            "error": "#ba1a1a",
-            "error-container": "#ffdad6",
-            "on-error": "#ffffff",
-            "on-error-container": "#93000a"
+            "primary": "var(--color-primary)",
+            "primary-container": "var(--color-primary-container)",
+            "on-primary": "var(--color-on-primary)",
+            "on-primary-container": "var(--color-on-primary-container)",
+            "primary-fixed": "var(--color-primary-fixed)",
+            "primary-fixed-dim": "var(--color-primary-fixed-dim)",
+            "on-primary-fixed": "var(--color-on-primary-fixed)",
+            "on-primary-fixed-variant": "var(--color-on-primary-fixed-variant)",
+            "secondary": "var(--color-secondary)",
+            "secondary-container": "var(--color-secondary-container)",
+            "on-secondary": "var(--color-on-secondary)",
+            "on-secondary-container": "var(--color-on-secondary-container)",
+            "secondary-fixed": "var(--color-secondary-fixed)",
+            "secondary-fixed-dim": "var(--color-secondary-fixed-dim)",
+            "on-secondary-fixed": "var(--color-on-secondary-fixed)",
+            "on-secondary-fixed-variant": "var(--color-on-secondary-fixed-variant)",
+            "tertiary": "var(--color-tertiary)",
+            "tertiary-container": "var(--color-tertiary-container)",
+            "on-tertiary": "var(--color-on-tertiary)",
+            "on-tertiary-container": "var(--color-on-tertiary-container)",
+            "background": "var(--color-background)",
+            "on-background": "var(--color-on-background)",
+            "surface": "var(--color-surface)",
+            "surface-dim": "var(--color-surface-dim)",
+            "surface-bright": "var(--color-surface-bright)",
+            "surface-container-lowest": "var(--color-surface-container-lowest)",
+            "surface-container-low": "var(--color-surface-container-low)",
+            "surface-container": "var(--color-surface-container)",
+            "surface-container-high": "var(--color-surface-container-high)",
+            "surface-container-highest": "var(--color-surface-container-highest)",
+            "on-surface": "var(--color-on-surface)",
+            "on-surface-variant": "var(--color-on-surface-variant)",
+            "outline": "var(--color-outline)",
+            "outline-variant": "var(--color-outline-variant)",
+            "error": "var(--color-error)",
+            "error-container": "var(--color-error-container)",
+            "on-error": "var(--color-on-error)",
+            "on-error-container": "var(--color-on-error-container)"
           },
           fontFamily: {
             sans: ["Plus Jakarta Sans", "sans-serif"],
@@ -71,6 +74,89 @@
   </script>
 
   <style>
+    :root {
+      --color-primary: #3525cd;
+      --color-primary-container: #4f46e5;
+      --color-on-primary: #ffffff;
+      --color-on-primary-container: #dad7ff;
+      --color-primary-fixed: #e2dfff;
+      --color-primary-fixed-dim: #c3c0ff;
+      --color-on-primary-fixed: #0f0069;
+      --color-on-primary-fixed-variant: #3323cc;
+      --color-secondary: #006c4a;
+      --color-secondary-container: #82f5c1;
+      --color-on-secondary: #ffffff;
+      --color-on-secondary-container: #00714e;
+      --color-secondary-fixed: #85f8c4;
+      --color-secondary-fixed-dim: #68dba9;
+      --color-on-secondary-fixed: #002114;
+      --color-on-secondary-fixed-variant: #005137;
+      --color-tertiary: #004c76;
+      --color-tertiary-container: #00659a;
+      --color-on-tertiary: #ffffff;
+      --color-on-tertiary-container: #bedfff;
+      --color-background: #faf8ff;
+      --color-on-background: #131b2e;
+      --color-surface: #faf8ff;
+      --color-surface-dim: #d2d9f4;
+      --color-surface-bright: #faf8ff;
+      --color-surface-container-lowest: #ffffff;
+      --color-surface-container-low: #f2f3ff;
+      --color-surface-container: #eaedff;
+      --color-surface-container-high: #e2e7ff;
+      --color-surface-container-highest: #dae2fd;
+      --color-on-surface: #131b2e;
+      --color-on-surface-variant: #464555;
+      --color-outline: #777587;
+      --color-outline-variant: #c7c4d8;
+      --color-error: #ba1a1a;
+      --color-error-container: #ffdad6;
+      --color-on-error: #ffffff;
+      --color-on-error-container: #93000a;
+    }
+
+    /* "Obsidian Command" dark theme */
+    [data-theme="dark"] {
+      --color-primary: #c0c1ff;
+      --color-primary-container: #8083ff;
+      --color-on-primary: #1000a9;
+      --color-on-primary-container: #0d0096;
+      --color-primary-fixed: #e1e0ff;
+      --color-primary-fixed-dim: #c0c1ff;
+      --color-on-primary-fixed: #07006c;
+      --color-on-primary-fixed-variant: #2f2ebe;
+      --color-secondary: #bdc2ff;
+      --color-secondary-container: #2f3aa3;
+      --color-on-secondary: #131e8c;
+      --color-on-secondary-container: #a8afff;
+      --color-secondary-fixed: #e0e0ff;
+      --color-secondary-fixed-dim: #bdc2ff;
+      --color-on-secondary-fixed: #000767;
+      --color-on-secondary-fixed-variant: #2f3aa3;
+      --color-tertiary: #4edea3;
+      --color-tertiary-container: #00885d;
+      --color-on-tertiary: #003824;
+      --color-on-tertiary-container: #000703;
+      --color-background: #0c1322;
+      --color-on-background: #dce2f7;
+      --color-surface: #0c1322;
+      --color-surface-dim: #0c1322;
+      --color-surface-bright: #323949;
+      --color-surface-container-lowest: #070e1d;
+      --color-surface-container-low: #141b2b;
+      --color-surface-container: #191f2f;
+      --color-surface-container-high: #232a3a;
+      --color-surface-container-highest: #2e3545;
+      --color-on-surface: #dce2f7;
+      --color-on-surface-variant: #c7c4d7;
+      --color-outline: #908fa0;
+      --color-outline-variant: #464554;
+      --color-error: #ffb4ab;
+      --color-error-container: #93000a;
+      --color-on-error: #690005;
+      --color-on-error-container: #ffdad6;
+    }
+
     .material-symbols-outlined {
       font-family: 'Material Symbols Outlined' !important;
       font-weight: normal;
@@ -89,11 +175,30 @@
       font-family: 'Material Symbols Outlined' !important;
       font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24 !important;
     }
+    [x-cloak] { display: none !important; }
   </style>
 
+  <!-- Applied synchronously (before first paint) to avoid a light-mode flash
+       when the saved preference is dark. app.js syncs its reactive state to
+       this on init instead of re-deciding the theme itself. -->
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("omni_theme") === "dark") {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      } catch (e) {}
+    })();
+  </script>
+
   <link rel="stylesheet" href="/static/css/styles.css"/>
+
+  <!-- Voice engine + app logic must register Alpine.data() before Alpine core parses the DOM -->
+  <script src="/static/js/audio.js"></script>
+  <script src="/static/js/app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
-<body class="bg-background font-sans text-on-surface min-h-screen flex flex-col antialiased selection:bg-primary selection:text-white">
+<body x-data="omniApp()" x-cloak class="bg-background font-sans text-on-surface min-h-screen flex flex-col antialiased selection:bg-primary selection:text-on-primary">
 
   <!-- ========================================================================= -->
   <!-- TOP HEADER                                                                -->
@@ -101,26 +206,26 @@
   <header class="fixed top-0 left-0 right-0 h-16 bg-surface-container-lowest/90 backdrop-blur-xl border-b border-outline-variant/30 shadow-[0_1px_8px_rgba(0,0,0,0.03)] z-50 flex items-center justify-between px-4 sm:px-6">
     <!-- Brand Logo -->
     <div class="flex items-center gap-3">
-      <div class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-white shadow-sm font-bold text-lg">
+      <div class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-on-primary shadow-sm font-bold text-lg">
         <span class="material-symbols-outlined text-[22px]">graphic_eq</span>
       </div>
-      <div class="flex items-center gap-2 cursor-pointer" onclick="navigateTo('#ticket-queue')">
-        <span class="font-bold text-lg text-on-surface tracking-tight">OmniPulse Support</span>
-        <span class="hidden sm:inline-block px-2 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed font-semibold text-[11px] uppercase tracking-wider">Enterprise</span>
+      <div class="flex items-center gap-2 cursor-pointer" @click="navigate('#ticket-queue')">
+        <span class="font-bold text-lg text-on-surface tracking-tight">Wavelink Mobile</span>
+        <span class="hidden sm:inline-block px-2 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed font-semibold text-[11px] uppercase tracking-wider">Customer Care</span>
       </div>
     </div>
 
     <!-- Right-Hand Header Controls (Hidden on #login and #register) -->
-    <div id="header-user-controls" class="flex items-center">
-      <button id="user-menu-btn" onclick="handleAuthHeaderClick()" class="flex items-center gap-2 pl-2 text-left cursor-pointer focus:outline-none group">
-        <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-xs shadow-sm ring-2 ring-surface-container-high group-hover:ring-primary transition-all">
-          <span id="user-avatar-initials">--</span>
+    <div x-show="!isAuthView" style="display:flex" class="items-center">
+      <div class="flex items-center gap-2 pl-2">
+        <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-xs shadow-sm ring-2 ring-surface-container-high">
+          <span x-text="userInitials">--</span>
         </div>
         <div class="hidden lg:flex flex-col">
-          <span id="user-display-name" class="text-xs font-semibold text-on-surface leading-tight">Guest</span>
-          <span id="user-auth-action" class="text-[10px] text-outline">Sign Out</span>
+          <span x-text="userDisplayName" class="text-xs font-semibold text-on-surface leading-tight">Guest</span>
+          <span x-text="currentUser ? currentUser.email : ''" class="text-[10px] text-outline">--</span>
         </div>
-      </button>
+      </div>
     </div>
   </header>
 
@@ -130,19 +235,24 @@
   <main class="w-full pt-16 flex-1 bg-background relative flex flex-col">
 
     <!-- Toast Banner -->
-    <div id="toast-banner" class="fixed top-20 right-6 z-50 hidden transition-all duration-300 max-w-md p-4 rounded-xl shadow-lg border flex items-start gap-3">
-      <span id="toast-icon" class="material-symbols-outlined text-[22px] mt-0.5"></span>
+    <div
+      x-show="toast.visible"
+      x-transition
+      x-cloak
+      :class="`fixed top-20 right-6 z-50 transition-all duration-300 max-w-md p-4 rounded-xl shadow-lg border flex items-start gap-3 ${toastTheme().bg}`"
+    >
+      <span class="material-symbols-outlined text-[22px] mt-0.5" x-text="toastTheme().icon"></span>
       <div class="flex-1">
-        <div id="toast-title" class="font-bold text-sm"></div>
-        <div id="toast-message" class="text-xs mt-0.5 opacity-90 leading-relaxed"></div>
+        <div class="font-bold text-sm" x-text="toast.title"></div>
+        <div class="text-xs mt-0.5 opacity-90 leading-relaxed" x-text="toast.message"></div>
       </div>
-      <button onclick="hideToast()" class="text-current opacity-60 hover:opacity-100">
+      <button @click="hideToast()" class="text-current opacity-60 hover:opacity-100">
         <span class="material-symbols-outlined text-[18px]">close</span>
       </button>
     </div>
 
     <!-- VIEW 1: LOGIN (#login) -->
-    <div id="view-login" class="view-panel w-full py-10 px-4 flex justify-center">
+    <div x-show="view === 'login'" x-cloak class="view-panel w-full py-10 px-4 flex justify-center">
       <div class="w-full max-w-xl bg-surface-container-lowest rounded-2xl shadow-sm border border-outline-variant/30 p-6 sm:p-10 relative">
         <div class="mb-8">
           <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed-variant mb-3">
@@ -150,15 +260,15 @@
             <span class="font-semibold text-xs uppercase tracking-wider">Customer Authentication</span>
           </div>
           <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-on-surface">Sign in to your account</h1>
-          <p class="text-sm text-on-surface-variant mt-2">Access your support tickets, real-time voice triage, and SLA dispatch.</p>
+          <p class="text-sm text-on-surface-variant mt-2">Access your support tickets and real-time voice support.</p>
         </div>
 
-        <form id="login-form" autocomplete="off" onsubmit="event.preventDefault(); handleLoginSubmit();" class="space-y-5">
+        <form autocomplete="off" @submit.prevent="handleLoginSubmit()" class="space-y-5">
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="login-email">Work Email</label>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="login-email">Email Address</label>
             <div class="relative">
               <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px]">alternate_email</span>
-              <input id="login-email" class="w-full pl-11 pr-4 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="name@company.com" required type="email" autocomplete="username"/>
+              <input id="login-email" x-model="loginForm.email" class="w-full pl-11 pr-4 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="name@email.com" required type="email" autocomplete="username"/>
             </div>
           </div>
 
@@ -166,27 +276,31 @@
             <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="login-password">Password</label>
             <div class="relative">
               <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock</span>
-              <input id="login-password" class="w-full pl-11 pr-11 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="••••••••••••" required type="password" autocomplete="current-password"/>
-              <button class="absolute right-3.5 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface focus:outline-none" onclick="togglePasswordVisibility('login-password', this)" type="button">
-                <span class="material-symbols-outlined text-[20px]">visibility</span>
+              <input id="login-password" x-model="loginForm.password" :type="loginForm.showPassword ? 'text' : 'password'" class="w-full pl-11 pr-11 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="••••••••••••" required autocomplete="current-password"/>
+              <button class="absolute right-3.5 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface focus:outline-none" @click="loginForm.showPassword = !loginForm.showPassword" type="button">
+                <span class="material-symbols-outlined text-[20px]" x-text="loginForm.showPassword ? 'visibility_off' : 'visibility'">visibility</span>
               </button>
             </div>
           </div>
 
-          <button id="login-submit-btn" class="w-full py-3 px-6 rounded-xl bg-primary text-white font-semibold text-sm shadow-md hover:bg-primary-container active:scale-[0.99] transition-all flex items-center justify-center gap-2" type="submit">
-            <span>Sign In to Support Hub</span>
-            <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+          <button :disabled="loginForm.submitting" class="w-full py-3 px-6 rounded-xl bg-primary text-on-primary font-semibold text-sm shadow-md hover:bg-primary-container active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-70" type="submit">
+            <template x-if="!loginForm.submitting">
+              <span class="flex items-center gap-2"><span>Sign In to Wavelink Support</span><span class="material-symbols-outlined text-[20px]">arrow_forward</span></span>
+            </template>
+            <template x-if="loginForm.submitting">
+              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px] animate-spin">sync</span><span>Authenticating...</span></span>
+            </template>
           </button>
 
           <p class="text-xs text-center text-on-surface-variant pt-2">
-            Don't have an enterprise account? <a class="font-semibold text-primary hover:underline ml-1" href="#register">Register now</a>
+            Don't have a Wavelink account? <a class="font-semibold text-primary hover:underline ml-1" href="#register">Register now</a>
           </p>
         </form>
       </div>
     </div>
 
     <!-- VIEW 2: REGISTER (#register) -->
-    <div id="view-register" class="view-panel hidden w-full py-10 px-4 flex justify-center">
+    <div x-show="view === 'register'" x-cloak class="view-panel w-full py-10 px-4 flex justify-center">
       <div class="w-full max-w-xl bg-surface-container-lowest rounded-2xl shadow-sm border border-outline-variant/30 p-6 sm:p-10 relative">
         <div class="flex items-center justify-between mb-6">
           <a href="#login" class="inline-flex items-center gap-1 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors">
@@ -199,25 +313,25 @@
         <div class="mb-6">
           <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed-variant mb-2">
             <span class="material-symbols-outlined text-[16px]">badge</span>
-            <span class="font-semibold text-xs uppercase tracking-wider">Enterprise Onboarding</span>
+            <span class="font-semibold text-xs uppercase tracking-wider">New Customer Onboarding</span>
           </div>
           <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-on-surface">Create your support account</h1>
         </div>
 
-        <form id="register-form" autocomplete="off" onsubmit="event.preventDefault(); handleRegisterSubmit();" class="space-y-4">
+        <form autocomplete="off" @submit.prevent="handleRegisterSubmit()" class="space-y-4">
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="reg-name">Full Legal Name</label>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="reg-name">Full Name</label>
             <div class="relative">
               <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px]">person</span>
-              <input id="reg-name" class="w-full pl-11 pr-4 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="e.g. Alex Mercer" required type="text" autocomplete="off"/>
+              <input id="reg-name" x-model="registerForm.name" class="w-full pl-11 pr-4 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="e.g. Alex Mercer" required type="text" autocomplete="off"/>
             </div>
           </div>
 
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="reg-email">Work Email</label>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="reg-email">Email Address</label>
             <div class="relative">
               <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px]">alternate_email</span>
-              <input id="reg-email" class="w-full pl-11 pr-4 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="name@company.com" required type="email" autocomplete="off"/>
+              <input id="reg-email" x-model="registerForm.email" class="w-full pl-11 pr-4 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="name@email.com" required type="email" autocomplete="off"/>
             </div>
           </div>
 
@@ -225,184 +339,338 @@
             <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="reg-password">Password</label>
             <div class="relative">
               <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock</span>
-              <input id="reg-password" oninput="evaluatePasswordStrength(this.value)" class="w-full pl-11 pr-11 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="••••••••••••" required type="password" autocomplete="new-password"/>
-              <button class="absolute right-3.5 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface focus:outline-none" onclick="togglePasswordVisibility('reg-password', this)" type="button">
-                <span class="material-symbols-outlined text-[20px]">visibility</span>
+              <input id="reg-password" x-model="registerForm.password" :type="registerForm.showPassword ? 'text' : 'password'" class="w-full pl-11 pr-11 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="••••••••••••" required autocomplete="new-password"/>
+              <button class="absolute right-3.5 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface focus:outline-none" @click="registerForm.showPassword = !registerForm.showPassword" type="button">
+                <span class="material-symbols-outlined text-[20px]" x-text="registerForm.showPassword ? 'visibility_off' : 'visibility'">visibility</span>
               </button>
             </div>
             <div class="grid grid-cols-4 gap-1.5 mt-2">
-              <div id="meter-bar-1" class="h-1 rounded-full bg-surface-container-high transition-colors"></div>
-              <div id="meter-bar-2" class="h-1 rounded-full bg-surface-container-high transition-colors"></div>
-              <div id="meter-bar-3" class="h-1 rounded-full bg-surface-container-high transition-colors"></div>
-              <div id="meter-bar-4" class="h-1 rounded-full bg-surface-container-high transition-colors"></div>
+              <div :class="strengthBarClass(0)"></div>
+              <div :class="strengthBarClass(1)"></div>
+              <div :class="strengthBarClass(2)"></div>
+              <div :class="strengthBarClass(3)"></div>
             </div>
+            <span class="font-code text-xs font-medium" :class="passwordStrength().colorClass" x-text="passwordStrength().label"></span>
           </div>
 
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-on-surface mb-1.5" for="reg-confirm-password">Confirm Password</label>
             <div class="relative">
               <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock_reset</span>
-              <input id="reg-confirm-password" oninput="checkPasswordMatch()" class="w-full pl-11 pr-11 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="••••••••••••" required type="password" autocomplete="new-password"/>
-              <span id="reg-match-icon" class="material-symbols-outlined absolute right-3.5 top-1/2 -translate-y-1/2 text-[20px] hidden"></span>
+              <input id="reg-confirm-password" x-model="registerForm.confirmPassword" class="w-full pl-11 pr-11 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary transition-all border border-transparent" placeholder="••••••••••••" required type="password" autocomplete="new-password"/>
+              <span
+                x-show="passwordsMatch() !== null"
+                class="material-symbols-outlined absolute right-3.5 top-1/2 -translate-y-1/2 text-[20px]"
+                :class="passwordsMatch() ? 'text-secondary' : 'text-error'"
+                x-text="passwordsMatch() ? 'check_circle' : 'cancel'"
+              ></span>
             </div>
           </div>
 
           <div class="pt-2">
-            <button id="register-submit-btn" class="w-full py-3 px-6 rounded-xl bg-primary text-white font-semibold text-sm shadow-md hover:bg-primary-container active:scale-[0.99] transition-all flex items-center justify-center gap-2" type="submit">
-              <span>Register for Support Hub</span>
-              <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+            <button :disabled="registerForm.submitting" class="w-full py-3 px-6 rounded-xl bg-primary text-on-primary font-semibold text-sm shadow-md hover:bg-primary-container active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-70" type="submit">
+              <template x-if="!registerForm.submitting">
+                <span class="flex items-center gap-2"><span>Create Wavelink Account</span><span class="material-symbols-outlined text-[20px]">arrow_forward</span></span>
+              </template>
+              <template x-if="registerForm.submitting">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px] animate-spin">sync</span><span>Creating Account...</span></span>
+              </template>
             </button>
           </div>
 
           <p class="text-xs text-center text-on-surface-variant pt-1">
-            Already have an enterprise account? <a class="font-semibold text-primary hover:underline ml-1" href="#login">Sign in here</a>
+            Already have a Wavelink account? <a class="font-semibold text-primary hover:underline ml-1" href="#login">Sign in here</a>
           </p>
         </form>
       </div>
     </div>
 
-    <!-- VIEW 3: CREATE TICKET (#create-ticket) -->
-    <div id="view-create-ticket" class="view-panel hidden w-full py-8 px-4 sm:px-6 flex flex-col items-center">
-      <div class="w-full max-w-3xl flex flex-col gap-6">
-        <div class="flex items-center justify-between">
-          <a href="#ticket-queue" class="inline-flex items-center gap-1 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors group">
-            <span class="material-symbols-outlined text-[16px] group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
-            <span>Back to Active Ticket Queue</span>
-          </a>
-          <div class="flex items-center gap-1.5 font-code text-xs text-outline px-3 py-1 rounded bg-surface-container-low">
-            <span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
-            <span>GATEWAY #04 • ACTIVE ROUTING</span>
-          </div>
+    <!-- ======================================================================= -->
+    <!-- VIEW 4: TICKET QUEUE & INQUIRIES (#ticket-queue) - MAIN HUB            -->
+    <!-- Create-ticket renders as an inline panel within this view (sidebar    -->
+    <!-- stays put, dismissed via a back button) instead of a separate route. -->
+    <!-- ======================================================================= -->
+    <div x-show="view === 'ticket-queue'" x-cloak class="view-panel flex-1 flex overflow-hidden">
+      <aside class="hidden xl:flex w-72 bg-surface-container-low border-r border-outline-variant/30 flex-col py-5 px-3 shrink-0">
+        <div class="flex flex-col gap-4">
+          <span class="px-3 font-semibold text-[11px] uppercase tracking-wider text-outline">Operations Console</span>
+          <nav class="flex flex-col gap-1">
+            <a href="#ticket-queue" class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-primary text-on-primary font-semibold text-xs shadow-sm">
+              <span class="material-symbols-outlined text-[20px]">inbox</span>
+              <span>Ticket Queue & Inquiries</span>
+            </a>
+            <a href="#ticket-queue" @click="showToast('Recordings', 'Encrypted call logs available on demand.', 'info')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
+              <span class="material-symbols-outlined text-[20px]">record_voice_over</span>
+              <span>Call Transcripts</span>
+            </a>
+            <a href="#settings" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
+              <span class="material-symbols-outlined text-[20px]">tune</span>
+              <span>Settings & Audio Devices</span>
+            </a>
+          </nav>
         </div>
+      </aside>
 
-        <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm p-6 sm:p-8 flex flex-col gap-6">
-          <div class="flex flex-col gap-1">
-            <div class="flex items-center gap-2">
-              <span class="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed">Support Dispatch</span>
-              <span class="font-code text-xs text-outline">TKT-GEN-V4</span>
-            </div>
-            <h1 class="text-2xl font-bold tracking-tight text-on-surface mt-1">Submit a ticket request</h1>
-            <p class="text-sm text-on-surface-variant">Provide detailed context for engineering triage and specialist routing.</p>
-          </div>
+      <div class="flex-1 flex flex-col overflow-y-auto p-4 sm:p-6">
+        <div class="w-full max-w-7xl mx-auto flex flex-col gap-6">
 
-          <form id="create-ticket-form" onsubmit="event.preventDefault(); handleTicketSubmit();" class="flex flex-col gap-6">
-            <div class="flex flex-col gap-2">
-              <label class="text-xs font-semibold uppercase tracking-wider text-on-surface">Incident Category <span class="text-error">*</span></label>
-              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5" id="category-pill-group">
-                <button type="button" data-category="Technical Incident" class="cat-pill active flex items-center gap-2 p-3 rounded-xl bg-primary text-white text-left transition-all shadow-sm">
-                  <span class="material-symbols-outlined text-[18px]">bug_report</span>
-                  <span class="text-xs font-semibold flex-1 truncate">Technical Incident</span>
-                  <span class="material-symbols-outlined text-[16px]">check</span>
-                </button>
-                <button type="button" data-category="Voice Bridge / Audio" class="cat-pill flex items-center gap-2 p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container text-left transition-all">
-                  <span class="material-symbols-outlined text-[18px] text-outline">graphic_eq</span>
-                  <span class="text-xs font-semibold flex-1 truncate">Voice Bridge / Audio</span>
-                </button>
-                <button type="button" data-category="Authentication & SSO" class="cat-pill flex items-center gap-2 p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container text-left transition-all">
-                  <span class="material-symbols-outlined text-[18px] text-outline">passkey</span>
-                  <span class="text-xs font-semibold flex-1 truncate">Authentication & SSO</span>
-                </button>
-                <button type="button" data-category="API & Webhooks" class="cat-pill flex items-center gap-2 p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container text-left transition-all">
-                  <span class="material-symbols-outlined text-[18px] text-outline">webhook</span>
-                  <span class="text-xs font-semibold flex-1 truncate">API & Webhooks</span>
-                </button>
-                <button type="button" data-category="Billing & Invoicing" class="cat-pill flex items-center gap-2 p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container text-left transition-all">
-                  <span class="material-symbols-outlined text-[18px] text-outline">receipt_long</span>
-                  <span class="text-xs font-semibold flex-1 truncate">Billing & Invoicing</span>
-                </button>
-                <button type="button" data-category="Account Permissions" class="cat-pill flex items-center gap-2 p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container text-left transition-all">
-                  <span class="material-symbols-outlined text-[18px] text-outline">badge</span>
-                  <span class="text-xs font-semibold flex-1 truncate">Account Permissions</span>
-                </button>
-              </div>
-            </div>
-
-            <div class="flex flex-col gap-1.5">
-              <label for="ticket-subject" class="text-xs font-semibold uppercase tracking-wider text-on-surface">Subject <span class="text-error">*</span></label>
-              <div class="relative flex items-center">
-                <span class="material-symbols-outlined absolute left-3.5 text-outline text-[20px]">flag</span>
-                <input id="ticket-subject" class="w-full pl-11 pr-4 py-2.5 bg-surface-container-low text-on-surface rounded-xl text-sm focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary focus:outline-none transition-all" placeholder="e.g., Unrecognized charge on card ending in 4242" required type="text"/>
-              </div>
-            </div>
-
-            <div class="flex flex-col gap-2">
-              <label class="text-xs font-semibold uppercase tracking-wider text-on-surface">Urgency & Impact <span class="text-error">*</span></label>
-              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5" id="priority-card-group">
-                <div data-priority="low" class="prio-card cursor-pointer p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container transition-all">
-                  <div class="flex items-center justify-between"><span class="text-xs font-bold">Low</span><span class="w-2.5 h-2.5 rounded-full bg-outline"></span></div>
-                  <span class="text-[11px] text-on-surface-variant block mt-1">General • 24h</span>
-                </div>
-                <div data-priority="medium" class="prio-card cursor-pointer p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container transition-all">
-                  <div class="flex items-center justify-between"><span class="text-xs font-bold">Medium</span><span class="w-2.5 h-2.5 rounded-full bg-tertiary-container"></span></div>
-                  <span class="text-[11px] text-on-surface-variant block mt-1">Degraded • 4h</span>
-                </div>
-                <div data-priority="high" class="prio-card active cursor-pointer p-3 rounded-xl bg-primary text-white transition-all shadow-sm">
-                  <div class="flex items-center justify-between"><span class="text-xs font-bold">High</span><span class="w-2.5 h-2.5 rounded-full bg-white"></span></div>
-                  <span class="text-[11px] text-on-primary-container block mt-1">Critical • &lt; 30m</span>
-                </div>
-                <div data-priority="critical" class="prio-card cursor-pointer p-3 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container transition-all">
-                  <div class="flex items-center justify-between"><span class="text-xs font-bold text-error">Critical</span><span class="w-2.5 h-2.5 rounded-full bg-error"></span></div>
-                  <span class="text-[11px] text-on-surface-variant block mt-1">Outage • &lt; 5m</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex flex-col gap-1.5">
-              <div class="flex items-center justify-between">
-                <label for="ticket-desc" class="text-xs font-semibold uppercase tracking-wider text-on-surface">Description <span class="text-error">*</span></label>
-                <span id="ticket-desc-count" class="font-code text-xs text-outline">0 / 2,000</span>
-              </div>
-              <textarea id="ticket-desc" oninput="updateCharCount()" placeholder="e.g. I encountered an error while trying to process transaction... Steps to reproduce: 1. Click dispute, 2. Enter card number..." class="w-full p-3.5 bg-surface-container-low text-on-surface rounded-xl text-sm focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary focus:outline-none transition-all resize-y min-h-[120px] placeholder:text-outline/50 placeholder:italic" required rows="4"></textarea>
-            </div>
-
-            <div class="flex items-center justify-between p-4 rounded-xl bg-surface-container-low">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-secondary-container/40 flex items-center justify-center text-on-secondary-container">
-                  <span class="material-symbols-outlined text-[22px]">phone_in_talk</span>
-                </div>
+          <!-- Ticket list (hidden while the create-ticket panel is open) -->
+          <template x-if="!showCreateTicketForm">
+            <div class="flex flex-col gap-6">
+              <div class="w-full bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm p-5 sm:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
-                  <span class="text-sm font-semibold text-on-surface block">Direct Voice Bridge Escalation</span>
-                  <span class="text-xs text-on-surface-variant">Launch live voice call immediately upon ticket submission.</span>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed">
+                      Operations Dispatch
+                    </span>
+                    <span class="font-code text-xs text-outline font-semibold">
+                      <span x-text="tickets.length"></span> Incident<span x-show="tickets.length !== 1">s</span>
+                    </span>
+                  </div>
+                  <h1 class="text-2xl font-bold tracking-tight text-on-surface">Ticket Queue & Inquiries</h1>
+                  <p class="text-xs text-on-surface-variant mt-0.5">Select any incident to launch its dedicated voice triage and chat troubleshooting session.</p>
+                </div>
+
+                <button @click="showCreateTicketForm = true" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-semibold text-xs shadow-md transition-all active:scale-95 shrink-0">
+                  <span class="material-symbols-outlined text-[18px]">add</span>
+                  <span>Create a New Ticket</span>
+                </button>
+              </div>
+
+              <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden flex flex-col">
+                <div class="p-4 bg-surface-container-low border-b border-outline-variant/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[18px] text-outline">table_rows</span>
+                    <span class="text-xs font-bold uppercase tracking-wider text-on-surface">Recorded Telemetry Incidents</span>
+                  </div>
+
+                  <div class="flex items-center gap-3 justify-between sm:justify-end">
+                    <div class="flex items-center gap-1 p-1 rounded-xl bg-surface-container-high">
+                      <button
+                        @click="setTicketStatusFilter('open')"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                        :class="ticketStatusFilter === 'open' ? 'bg-surface-container-lowest shadow-sm text-primary' : 'text-on-surface-variant hover:text-on-surface'"
+                      >Open</button>
+                      <button
+                        @click="setTicketStatusFilter('closed')"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                        :class="ticketStatusFilter === 'closed' ? 'bg-surface-container-lowest shadow-sm text-primary' : 'text-on-surface-variant hover:text-on-surface'"
+                      >Closed</button>
+                      <button
+                        @click="setTicketStatusFilter('all')"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                        :class="ticketStatusFilter === 'all' ? 'bg-surface-container-lowest shadow-sm text-primary' : 'text-on-surface-variant hover:text-on-surface'"
+                      >Both</button>
+                    </div>
+
+                    <button @click="fetchTicketQueue()" class="text-xs text-primary font-semibold hover:underline flex items-center gap-1 shrink-0">
+                      <span class="material-symbols-outlined text-[16px]">refresh</span>
+                      <span class="hidden sm:inline">Refresh</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="divide-y divide-outline-variant/20 flex flex-col">
+                  <template x-if="ticketsLoading">
+                    <div class="py-12 flex flex-col items-center justify-center gap-2 text-outline">
+                      <span class="material-symbols-outlined text-3xl animate-spin">sync</span>
+                      <span class="text-xs">Loading queue records from backend...</span>
+                    </div>
+                  </template>
+
+                  <template x-if="!ticketsLoading && tickets.length === 0">
+                    <div class="py-16 flex flex-col items-center justify-center text-center gap-3 p-6 text-outline">
+                      <div class="w-12 h-12 rounded-full bg-surface-container-low flex items-center justify-center text-outline">
+                        <span class="material-symbols-outlined text-[28px]">inbox</span>
+                      </div>
+                      <div>
+                        <h4 class="text-sm font-bold text-on-surface" x-text="ticketStatusFilter === 'closed' ? 'No archived tickets' : ticketStatusFilter === 'all' ? 'Your ticket queue is empty' : 'No open tickets'"></h4>
+                        <p class="text-xs text-on-surface-variant max-w-sm mt-1" x-text="ticketStatusFilter === 'closed' ? 'Tickets you archive will show up here.' : 'No support tickets have been filed yet. Create a ticket to dispatch telemetry to specialist routing.'"></p>
+                      </div>
+                    </div>
+                  </template>
+
+                  <template x-for="ticket in tickets" :key="ticket.ticket_id">
+                    <div class="p-4 sm:p-5 hover:bg-surface-container-low/60 transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div class="flex items-start gap-3.5 flex-1 min-w-0">
+                        <div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-primary shrink-0 mt-0.5">
+                          <span class="material-symbols-outlined text-[20px]">confirmation_number</span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center gap-2 flex-wrap">
+                            <span class="font-code font-bold text-primary text-xs" x-text="ticket.ticket_id"></span>
+                            <span class="text-outline">•</span>
+                            <span class="text-xs font-semibold text-on-surface-variant truncate" x-text="ticket.category"></span>
+                            <span class="text-outline">•</span>
+                            <span class="font-code text-[11px] text-outline" x-text="ticket.created_at || 'Recently filed'"></span>
+                            <span
+                              class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                              :class="ticket.status === 'CLOSED' ? 'bg-surface-container-high text-outline' : 'bg-secondary-container text-on-secondary-container'"
+                              x-text="ticket.status"
+                            ></span>
+                          </div>
+                          <h3 class="text-sm font-bold text-on-surface truncate mt-0.5" x-text="ticket.subject"></h3>
+                          <p class="text-xs text-on-surface-variant line-clamp-1 mt-0.5" x-text="ticket.description"></p>
+                        </div>
+                      </div>
+
+                      <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-outline-variant/10">
+                        <div class="flex flex-col items-start sm:items-end">
+                          <span class="text-[10px] uppercase tracking-wider text-outline font-semibold" x-text="ticket.assigned_desk"></span>
+                          <span class="text-xs font-bold flex items-center gap-1 mt-0.5" :class="isHighPriority(ticket.priority) ? 'text-error' : 'text-primary'">
+                            <span class="w-1.5 h-1.5 rounded-full" :class="isHighPriority(ticket.priority) ? 'bg-error' : 'bg-primary'"></span>
+                            <span x-text="ticket.priority"></span>
+                          </span>
+                        </div>
+
+                        <button
+                          x-show="ticket.status === 'OPEN'"
+                          @click="archiveTicket(ticket)"
+                          title="Mark as done"
+                          class="px-3 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container-high text-on-surface-variant text-xs font-semibold transition-all flex items-center gap-1"
+                        >
+                          <span class="material-symbols-outlined text-[16px]">archive</span>
+                          <span class="hidden md:inline">Archive</span>
+                        </button>
+                        <button
+                          x-show="ticket.status === 'CLOSED'"
+                          @click="reopenTicket(ticket)"
+                          title="Reopen ticket"
+                          class="px-3 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container-high text-on-surface-variant text-xs font-semibold transition-all flex items-center gap-1"
+                        >
+                          <span class="material-symbols-outlined text-[16px]">restart_alt</span>
+                          <span class="hidden md:inline">Reopen</span>
+                        </button>
+
+                        <button @click="openTicketInLiveRoom(ticket)" class="px-3.5 py-1.5 rounded-lg bg-surface-container-low hover:bg-primary hover:text-on-primary text-on-surface text-xs font-semibold transition-all flex items-center gap-1 shadow-sm">
+                          <span>Troubleshoot</span>
+                          <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+                        </button>
+                      </div>
+                    </div>
+                  </template>
                 </div>
               </div>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input id="escalation-toggle" checked class="sr-only peer" type="checkbox"/>
-                <div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-secondary"></div>
-              </label>
             </div>
+          </template>
 
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-              <button onclick="saveTicketDraft()" type="button" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-surface-container-low text-on-surface font-semibold text-xs hover:bg-surface-container transition-all flex items-center justify-center gap-1.5">
-                <span class="material-symbols-outlined text-[18px]">bookmark</span>
-                <span>Save as Draft</span>
+          <!-- Create-ticket panel (inline, same sidebar, dismissed via back button) -->
+          <template x-if="showCreateTicketForm">
+            <div class="flex flex-col gap-4">
+              <button type="button" @click="showCreateTicketForm = false" class="inline-flex items-center gap-1 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors group w-fit">
+                <span class="material-symbols-outlined text-[16px] group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
+                <span>Back to Ticket Queue</span>
               </button>
-              <button id="ticket-submit-btn" type="submit" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-primary text-white font-semibold text-xs shadow-md hover:bg-primary-container transition-all flex items-center justify-center gap-2 group">
-                <span>Create Ticket & Route to Specialist</span>
-                <span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
-              </button>
+
+              <div class="w-full bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm p-5 sm:p-6 flex flex-col gap-4">
+                <div class="flex flex-col gap-0.5">
+                  <h1 class="text-xl font-bold tracking-tight text-on-surface">Submit a ticket request</h1>
+                  <p class="text-xs text-on-surface-variant">Provide detailed context for engineering triage and specialist routing.</p>
+                </div>
+
+                <form @submit.prevent="submitTicket()" class="flex flex-col gap-4">
+                  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="flex flex-col gap-1.5">
+                      <label class="text-xs font-semibold uppercase tracking-wider text-on-surface">Incident Category <span class="text-error">*</span></label>
+                      <div class="grid grid-cols-3 gap-2">
+                        <template x-for="cat in categories" :key="cat.name">
+                          <button type="button" @click="ticketForm.category = cat.name" :class="categoryClass(cat.name)">
+                            <span class="material-symbols-outlined text-[18px]" :class="ticketForm.category === cat.name ? '' : 'text-outline'" x-text="cat.icon"></span>
+                            <span class="text-xs font-semibold flex-1 truncate" x-text="cat.name"></span>
+                            <span x-show="ticketForm.category === cat.name" class="material-symbols-outlined text-[16px]">check</span>
+                          </button>
+                        </template>
+                      </div>
+                    </div>
+
+                    <div class="flex flex-col gap-1.5">
+                      <label class="text-xs font-semibold uppercase tracking-wider text-on-surface">Urgency & Impact <span class="text-error">*</span></label>
+                      <div class="grid grid-cols-4 gap-2">
+                        <template x-for="p in priorities" :key="p.id">
+                          <div @click="ticketForm.priority = p.id" :class="priorityCardClass(p.id)">
+                            <div class="flex items-center justify-between">
+                              <span class="text-xs font-bold" :class="p.id === 'critical' && ticketForm.priority !== p.id ? 'text-error' : ''" x-text="p.label"></span>
+                              <span :class="ticketForm.priority === p.id ? 'w-2.5 h-2.5 rounded-full bg-on-primary' : `w-2.5 h-2.5 rounded-full ${p.dot}`"></span>
+                            </div>
+                            <span :class="prioritySubClass(p.id)" x-text="p.sub"></span>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-col gap-1.5">
+                    <label for="ticket-subject" class="text-xs font-semibold uppercase tracking-wider text-on-surface">Subject <span class="text-error">*</span></label>
+                    <div class="relative flex items-center">
+                      <span class="material-symbols-outlined absolute left-3.5 text-outline text-[20px]">flag</span>
+                      <input id="ticket-subject" x-model="ticketForm.subject" class="w-full pl-11 pr-4 py-2.5 bg-surface-container-low text-on-surface rounded-xl text-sm focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary focus:outline-none transition-all" placeholder="e.g., No signal in Downtown since this morning" required type="text"/>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-col gap-1.5">
+                    <div class="flex items-center justify-between">
+                      <label for="ticket-desc" class="text-xs font-semibold uppercase tracking-wider text-on-surface">Description <span class="text-error">*</span></label>
+                      <span class="font-code text-xs text-outline"><span x-text="descCharCount"></span> / 2,000</span>
+                    </div>
+                    <textarea id="ticket-desc" x-model="ticketForm.description" maxlength="2000" placeholder="e.g. My data and calls have been dropping since 9am. I've tried restarting my phone but the issue persists." class="w-full p-3 bg-surface-container-low text-on-surface rounded-xl text-sm focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary focus:outline-none transition-all resize-y min-h-[70px] placeholder:text-outline/50 placeholder:italic" required rows="3"></textarea>
+                  </div>
+
+                  <div class="flex items-center justify-between p-3 rounded-xl bg-surface-container-low">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-lg bg-secondary-container/40 flex items-center justify-center text-on-secondary-container shrink-0">
+                        <span class="material-symbols-outlined text-[20px]">phone_in_talk</span>
+                      </div>
+                      <div>
+                        <span class="text-sm font-semibold text-on-surface block">Direct Voice Bridge Escalation</span>
+                        <span class="text-xs text-on-surface-variant">Launch live voice call immediately upon ticket submission.</span>
+                      </div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+                      <input x-model="ticketForm.escalate" class="sr-only peer" type="checkbox"/>
+                      <div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-secondary"></div>
+                    </label>
+                  </div>
+
+                  <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <button @click="saveTicketDraft()" type="button" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-surface-container-low text-on-surface font-semibold text-xs hover:bg-surface-container transition-all flex items-center justify-center gap-1.5">
+                      <span class="material-symbols-outlined text-[18px]">bookmark</span>
+                      <span>Save as Draft</span>
+                    </button>
+                    <button :disabled="ticketForm.submitting" type="submit" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-primary text-on-primary font-semibold text-xs shadow-md hover:bg-primary-container transition-all flex items-center justify-center gap-2 group disabled:opacity-70">
+                      <template x-if="!ticketForm.submitting">
+                        <span class="flex items-center gap-2"><span>Create Ticket & Route to Specialist</span><span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">arrow_forward</span></span>
+                      </template>
+                      <template x-if="ticketForm.submitting">
+                        <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px] animate-spin">sync</span><span>Saving to SQLite...</span></span>
+                      </template>
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
-          </form>
+          </template>
+
         </div>
       </div>
     </div>
 
     <!-- ======================================================================= -->
-    <!-- VIEW 4: TICKET QUEUE & INQUIRIES (#ticket-queue) - MAIN HUB            -->
+    <!-- VIEW: SETTINGS (#settings)                                             -->
     <!-- ======================================================================= -->
-    <div id="view-ticket-queue" class="view-panel hidden flex-1 flex overflow-hidden">
+    <div x-show="view === 'settings'" x-cloak class="view-panel flex-1 flex overflow-hidden">
       <aside class="hidden xl:flex w-72 bg-surface-container-low border-r border-outline-variant/30 flex-col py-5 px-3 shrink-0">
         <div class="flex flex-col gap-4">
           <span class="px-3 font-semibold text-[11px] uppercase tracking-wider text-outline">Operations Console</span>
           <nav class="flex flex-col gap-1">
-            <a href="#ticket-queue" class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-primary text-white font-semibold text-xs shadow-sm">
+            <a href="#ticket-queue" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
               <span class="material-symbols-outlined text-[20px]">inbox</span>
               <span>Ticket Queue & Inquiries</span>
             </a>
-            <a href="#ticket-queue" onclick="showToast('Recordings', 'Encrypted call logs available on demand.', 'info')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
+            <a href="#ticket-queue" @click="showToast('Recordings', 'Encrypted call logs available on demand.', 'info')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
               <span class="material-symbols-outlined text-[20px]">record_voice_over</span>
               <span>Call Transcripts</span>
             </a>
-            <a href="#ticket-queue" onclick="showToast('Settings', 'Audio downsampling & hardware profiles verified.', 'info')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
+            <a href="#settings" class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-primary text-on-primary font-semibold text-xs shadow-sm">
               <span class="material-symbols-outlined text-[20px]">tune</span>
               <span>Settings & Audio Devices</span>
             </a>
@@ -416,34 +684,124 @@
             <div>
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed">
-                  Operations Dispatch
+                  System Configuration
                 </span>
-                <span id="queue-count-badge" class="font-code text-xs text-outline font-semibold">0 Active</span>
               </div>
-              <h1 class="text-2xl font-bold tracking-tight text-on-surface">Ticket Queue & Inquiries</h1>
-              <p class="text-xs text-on-surface-variant mt-0.5">Select any incident to launch its dedicated voice triage and chat troubleshooting session.</p>
+              <h1 class="text-2xl font-bold tracking-tight text-on-surface">Settings</h1>
+              <p class="text-xs text-on-surface-variant mt-0.5">Manage your microphone device and call audio behavior.</p>
             </div>
 
-            <button onclick="navigateTo('#create-ticket')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-white font-semibold text-xs shadow-md transition-all active:scale-95 shrink-0">
-              <span class="material-symbols-outlined text-[18px]">add</span>
-              <span>Create a New Ticket</span>
-            </button>
+            <span
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0"
+              :class="mic.status === 'ready' ? 'bg-secondary-container text-on-secondary-container' : 'bg-error-container text-on-error-container'"
+            >
+              <span class="material-symbols-outlined material-symbols-filled text-[16px]" x-text="mic.status === 'ready' ? 'check_circle' : 'error'"></span>
+              <span x-text="mic.status === 'ready' ? 'Microphone Ready' : micStatusLabel()"></span>
+            </span>
           </div>
 
-          <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden flex flex-col">
-            <div class="p-4 bg-surface-container-low border-b border-outline-variant/20 flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="material-symbols-outlined text-[18px] text-outline">table_rows</span>
-                <span class="text-xs font-bold uppercase tracking-wider text-on-surface">Recorded Telemetry Incidents</span>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <!-- Microphone Device -->
+            <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden flex flex-col">
+              <div class="p-4 bg-surface-container-low border-b border-outline-variant/20 flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px] text-outline">mic</span>
+                <span class="text-xs font-bold uppercase tracking-wider text-on-surface">Microphone Device</span>
               </div>
-              <button onclick="fetchTicketQueue()" class="text-xs text-primary font-semibold hover:underline flex items-center gap-1">
-                <span class="material-symbols-outlined text-[16px]">refresh</span>
-                <span>Refresh Queue</span>
-              </button>
+
+              <div class="p-4 sm:p-5 flex flex-col gap-4">
+                <div class="flex flex-col gap-1.5">
+                  <div class="flex items-center justify-between">
+                    <label class="text-[10px] text-outline uppercase font-semibold">Input Source</label>
+                    <button @click="detectMicrophones()" title="Re-scan devices" class="text-outline hover:text-primary transition-colors">
+                      <span class="material-symbols-outlined text-[16px]" :class="mic.status === 'detecting' ? 'animate-spin' : ''">refresh</span>
+                    </button>
+                  </div>
+
+                  <select
+                    x-show="mic.devices.length > 0"
+                    x-model="mic.selectedId"
+                    :disabled="voice.connected"
+                    class="w-full px-3 py-2 bg-surface-container-low text-on-surface rounded-lg text-xs focus:ring-2 focus:ring-primary focus:outline-none disabled:opacity-60"
+                  >
+                    <template x-for="device in mic.devices" :key="device.deviceId">
+                      <option :value="device.deviceId" x-text="device.label"></option>
+                    </template>
+                  </select>
+
+                  <div
+                    x-show="mic.devices.length === 0"
+                    class="text-[11px] px-2.5 py-2 rounded-lg flex items-center gap-1.5"
+                    :class="mic.status === 'detecting' ? 'bg-surface-container-low text-outline' : 'bg-error-container text-on-error-container'"
+                  >
+                    <span class="material-symbols-outlined text-[14px]" x-text="mic.status === 'detecting' ? 'sync' : 'mic_off'"></span>
+                    <span x-text="micStatusLabel()"></span>
+                  </div>
+                </div>
+
+                <button @click="testMicHardware()" :class="micTestBtnClass()" x-text="micTest.label">
+                  Test Microphone Input
+                </button>
+              </div>
             </div>
 
-            <div id="ticket-queue-list" class="divide-y divide-outline-variant/20 flex flex-col">
-              <!-- Rendered dynamically -->
+            <!-- Appearance -->
+            <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden flex flex-col">
+              <div class="p-4 bg-surface-container-low border-b border-outline-variant/20 flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px] text-outline">palette</span>
+                <span class="text-xs font-bold uppercase tracking-wider text-on-surface">Appearance</span>
+              </div>
+
+              <div class="p-4 sm:p-5 flex flex-col gap-3">
+                <div class="flex items-center justify-between p-3 rounded-xl bg-surface-container-low">
+                  <div class="pr-3">
+                    <span class="text-sm font-semibold text-on-surface block">Theme</span>
+                    <span class="text-xs text-on-surface-variant">Choose how Wavelink Mobile looks on this device.</span>
+                  </div>
+                  <div class="flex items-center gap-1 p-1 rounded-xl bg-surface-container-high shrink-0">
+                    <button
+                      @click="setTheme('light')"
+                      class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                      :class="theme === 'light' ? 'bg-surface-container-lowest shadow-sm text-primary' : 'text-on-surface-variant hover:text-on-surface'"
+                    >
+                      <span class="material-symbols-outlined text-[16px]">light_mode</span>
+                      <span>Light</span>
+                    </button>
+                    <button
+                      @click="setTheme('dark')"
+                      class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                      :class="theme === 'dark' ? 'bg-surface-container-lowest shadow-sm text-primary' : 'text-on-surface-variant hover:text-on-surface'"
+                    >
+                      <span class="material-symbols-outlined text-[16px]">dark_mode</span>
+                      <span>Dark</span>
+                    </button>
+                  </div>
+                </div>
+
+                <p class="text-[11px] text-outline pt-0.5">Applies immediately and is remembered on this device.</p>
+              </div>
+            </div>
+
+            <!-- Account -->
+            <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden flex flex-col">
+              <div class="p-4 bg-surface-container-low border-b border-outline-variant/20 flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px] text-outline">person</span>
+                <span class="text-xs font-bold uppercase tracking-wider text-on-surface">Account</span>
+              </div>
+
+              <div class="p-4 sm:p-5 flex flex-col gap-4">
+                <div class="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low">
+                  <div class="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-xs shrink-0" x-text="userInitials"></div>
+                  <div class="min-w-0">
+                    <span class="text-sm font-semibold text-on-surface block truncate" x-text="userDisplayName"></span>
+                    <span class="text-xs text-on-surface-variant block truncate" x-text="currentUser ? currentUser.email : ''"></span>
+                  </div>
+                </div>
+
+                <button @click="logout()" class="w-full py-2.5 rounded-xl bg-error-container text-on-error-container font-semibold text-xs hover:opacity-90 transition-all flex items-center justify-center gap-1.5">
+                  <span class="material-symbols-outlined text-[18px]">logout</span>
+                  <span>Sign Out</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -454,7 +812,7 @@
     <!-- VIEW 5: TICKET CHAT & VOICE SESSION (#live-room)                       -->
     <!-- Only accessible by clicking into a specific ticket                     -->
     <!-- ======================================================================= -->
-    <div id="view-live-room" class="view-panel hidden flex-1 flex overflow-hidden">
+    <div x-show="view === 'live-room'" x-cloak class="view-panel flex-1 flex overflow-hidden">
       <aside class="hidden xl:flex w-72 bg-surface-container-low border-r border-outline-variant/30 flex-col justify-between py-5 px-3 shrink-0">
         <div class="flex flex-col gap-4">
           <span class="px-3 font-semibold text-[11px] uppercase tracking-wider text-outline">Session Navigation</span>
@@ -464,15 +822,15 @@
               <span class="material-symbols-outlined text-[20px]">arrow_back</span>
               <span>Return to Ticket Queue</span>
             </a>
-            <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-primary text-white font-semibold text-xs shadow-sm mt-1">
+            <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-primary text-on-primary font-semibold text-xs shadow-sm mt-1">
               <span class="material-symbols-outlined text-[20px]">headset_mic</span>
-              <span id="sidebar-active-ticket-label">Active Ticket Session</span>
+              <span>Active Ticket Session</span>
             </div>
-            <a href="#ticket-queue" onclick="showToast('Recordings', 'Archive encrypted under SOC-2 parameters.', 'info')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
+            <a href="#ticket-queue" @click="showToast('Recordings', 'Archive encrypted under SOC-2 parameters.', 'info')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
               <span class="material-symbols-outlined text-[20px]">record_voice_over</span>
               <span>Call Transcripts</span>
             </a>
-            <a href="#ticket-queue" onclick="showToast('Audio Settings', 'Headset 16kHz PCM downsampler active.', 'info')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
+            <a href="#settings" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors font-medium text-xs">
               <span class="material-symbols-outlined text-[20px]">tune</span>
               <span>Settings & Audio Devices</span>
             </a>
@@ -484,7 +842,7 @@
             <span class="text-[11px] font-semibold uppercase tracking-wider text-outline">Telemetry</span>
             <span class="flex items-center gap-1 text-secondary font-code text-xs font-semibold">
               <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
-              <span id="sidebar-ping">18ms</span>
+              <span>18ms</span>
             </span>
           </div>
           <div class="flex items-center justify-between pt-1">
@@ -492,7 +850,11 @@
               <span class="material-symbols-outlined text-[16px] text-secondary">mic</span>
               <span class="text-xs">Microphone</span>
             </div>
-            <span id="mic-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded bg-surface-container text-outline">Standby</span>
+            <span
+              class="text-[10px] font-semibold px-2 py-0.5 rounded"
+              :class="voice.connected ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container text-outline'"
+              x-text="voice.micBadge"
+            ></span>
           </div>
         </div>
       </aside>
@@ -508,7 +870,7 @@
             </a>
             <div class="flex items-center gap-2">
               <span class="text-[11px] text-outline font-code">BOUND INCIDENT:</span>
-              <span id="session-ticket-badge" class="px-2 py-0.5 rounded bg-primary-fixed text-on-primary-fixed font-code font-bold text-xs">--</span>
+              <span class="px-2 py-0.5 rounded bg-primary-fixed text-on-primary-fixed font-code font-bold text-xs" x-text="currentTicket ? currentTicket.ticket_id : '--'"></span>
             </div>
           </div>
 
@@ -532,9 +894,22 @@
             </div>
 
             <div class="flex items-center gap-3 w-full md:w-auto justify-end">
-              <button id="directCallBtn" onclick="toggleVoiceBridge()" type="button" class="group flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white font-semibold text-xs shadow-md hover:bg-primary-container active:scale-95 transition-all">
-                <span class="material-symbols-outlined material-symbols-filled text-[18px]">call</span>
-                <span id="directCallBtnText">Start Direct Voice Call</span>
+              <button
+                @click="toggleVoiceBridge()"
+                :disabled="voice.connecting"
+                type="button"
+                class="group flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-xs shadow-md active:scale-95 transition-all disabled:opacity-70"
+                :class="voice.connected ? 'bg-error text-on-error hover:bg-red-700' : 'bg-primary text-on-primary hover:bg-primary-container'"
+              >
+                <template x-if="voice.connecting">
+                  <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px] animate-spin">sync</span><span>Connecting Audio...</span></span>
+                </template>
+                <template x-if="!voice.connecting && voice.connected">
+                  <span class="flex items-center gap-2"><span class="material-symbols-filled text-[18px]">call_end</span><span>Disconnect Voice</span></span>
+                </template>
+                <template x-if="!voice.connecting && !voice.connected">
+                  <span class="flex items-center gap-2"><span class="material-symbols-outlined material-symbols-filled text-[18px]">call</span><span>Start Direct Voice Call</span></span>
+                </template>
               </button>
             </div>
           </div>
@@ -546,14 +921,14 @@
               <div class="p-4 bg-surface-container-low border-b border-outline-variant/20 flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-3">
                   <div class="relative">
-                    <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-xs ring-2 ring-surface-container-lowest">
-                      ER
+                    <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-xs ring-2 ring-surface-container-lowest" x-text="personaInitials()">
+                      AI
                     </div>
                     <span class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-secondary ring-2 ring-white"></span>
                   </div>
                   <div>
                     <div class="flex items-center gap-1.5">
-                      <span class="text-sm font-bold text-on-surface">AI Support</span>
+                      <span class="text-sm font-bold text-on-surface" x-text="voice.personaName">AI Support</span>
                       <span class="material-symbols-outlined material-symbols-filled text-[16px] text-primary">verified</span>
                     </div>
                     <div class="flex items-center gap-1.5 text-on-surface-variant text-xs">
@@ -565,7 +940,7 @@
                 </div>
 
                 <div class="flex items-center gap-1">
-                  <button onclick="sendManualInterrupt()" title="Trigger Voice Barge-in" class="px-2.5 py-1 rounded-lg bg-surface-container text-xs font-semibold text-on-surface-variant hover:bg-surface-container-high transition-colors flex items-center gap-1">
+                  <button @click="sendManualInterrupt()" title="Trigger Voice Barge-in" class="px-2.5 py-1 rounded-lg bg-surface-container text-xs font-semibold text-on-surface-variant hover:bg-surface-container-high transition-colors flex items-center gap-1">
                     <span class="material-symbols-outlined text-[16px]">front_hand</span>
                     <span class="hidden sm:inline">Barge-in</span>
                   </button>
@@ -573,17 +948,17 @@
               </div>
 
               <!-- Voice Cockpit Strip -->
-              <div id="voiceSessionCockpit" class="hidden bg-secondary-container text-on-secondary-container px-4 py-2.5 flex items-center justify-between shrink-0 border-b border-secondary/20">
+              <div x-show="voice.connected" x-cloak class="bg-secondary-container text-on-secondary-container px-4 py-2.5 flex items-center justify-between shrink-0 border-b border-secondary/20">
                 <div class="flex items-center gap-3">
                   <span class="w-2.5 h-2.5 rounded-full bg-secondary animate-ping"></span>
                   <div>
-                    <span id="voiceCallStatusText" class="text-xs font-bold block">Live Voice Bridge Connected</span>
-                    <span class="font-code text-[11px] text-on-secondary-fixed-variant">16kHz Int16 PCM • Full Duplex Single-Socket</span>
+                    <span class="text-xs font-bold block">Live Voice Bridge Connected</span>
+                    <span class="font-code text-[11px] text-on-secondary-fixed-variant">24kHz Int16 PCM • Full Duplex Single-Socket</span>
                   </div>
                 </div>
                 <div class="flex items-center gap-3">
                   <canvas id="cockpitCanvas" width="120" height="24" class="rounded bg-secondary/10"></canvas>
-                  <button onclick="toggleVoiceBridge()" class="px-3 py-1 rounded-lg bg-error text-white font-semibold text-xs shadow-sm hover:bg-red-700 transition-colors">
+                  <button @click="toggleVoiceBridge()" class="px-3 py-1 rounded-lg bg-error text-on-error font-semibold text-xs shadow-sm hover:bg-red-700 transition-colors">
                     End Call
                   </button>
                 </div>
@@ -591,21 +966,49 @@
 
               <!-- Messages Container -->
               <div id="chatStream" class="flex-1 p-4 sm:p-6 flex flex-col gap-4 overflow-y-auto">
-                <!-- Dynamically populated per ticket by app.js -->
-                <div id="typingIndicator" class="hidden items-center gap-2 text-outline pl-10">
+                <template x-for="msg in messages" :key="msg.id">
+                  <div :class="msg.role === 'user' ? 'flex flex-col items-end gap-1' : 'flex items-start gap-2.5 max-w-xl'">
+                    <template x-if="msg.role === 'user'">
+                      <div class="flex flex-col items-end gap-1">
+                        <div class="flex items-center gap-1.5 text-outline text-[11px]">
+                          <span x-text="msg.sender"></span>
+                          <span class="font-code" x-text="msg.time"></span>
+                        </div>
+                        <div class="max-w-xl bg-primary text-on-primary p-3.5 rounded-2xl rounded-tr-sm shadow-sm text-sm leading-relaxed" x-text="msg.text"></div>
+                        <span class="text-[10px] text-outline flex items-center gap-1">
+                          <span class="material-symbols-filled text-[12px] text-primary">done_all</span> Delivered
+                        </span>
+                      </div>
+                    </template>
+                    <template x-if="msg.role !== 'user'">
+                      <div class="flex items-start gap-2.5 max-w-xl">
+                        <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-xs shrink-0 mt-1" x-text="initialsFor(msg.sender)">AI</div>
+                        <div class="flex flex-col gap-1">
+                          <div class="flex items-center gap-1.5 text-outline text-[11px]">
+                            <span class="font-semibold text-on-surface" x-text="msg.sender"></span>
+                            <span class="font-code" x-text="msg.time"></span>
+                          </div>
+                          <div class="bg-surface-container text-on-surface p-3.5 rounded-2xl rounded-tl-sm shadow-sm text-sm leading-relaxed" x-text="msg.text"></div>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+
+                <div x-show="typing.visible" x-cloak class="flex items-center gap-2 text-outline pl-10">
                   <span class="w-1.5 h-1.5 rounded-full bg-outline animate-bounce"></span>
                   <span class="w-1.5 h-1.5 rounded-full bg-outline animate-bounce delay-100"></span>
                   <span class="w-1.5 h-1.5 rounded-full bg-outline animate-bounce delay-200"></span>
-                  <span id="typingText" class="text-xs ml-1">Elena is speaking...</span>
+                  <span class="text-xs ml-1" x-text="typing.text"></span>
                 </div>
               </div>
 
               <!-- Chat Input -->
               <div class="p-3 sm:p-4 bg-surface-container-lowest border-t border-outline-variant/20 shrink-0">
-                <form id="chatForm" onsubmit="event.preventDefault(); sendTextMessage();" class="flex flex-col gap-1.5">
+                <form @submit.prevent="sendTextMessage()" class="flex flex-col gap-1.5">
                   <div class="flex items-center gap-2 bg-surface-container-low rounded-xl px-3.5 py-1.5 focus-within:bg-surface-container-lowest focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-                    <input id="chatInput" class="w-full bg-transparent text-on-surface text-sm placeholder:text-outline focus:outline-none" placeholder="Type your response or prompt Elena..." type="text"/>
-                    <button type="submit" class="p-2 rounded-lg bg-primary text-white hover:bg-primary-container active:scale-95 transition-all shrink-0">
+                    <input x-model="chatInput" class="w-full bg-transparent text-on-surface text-sm placeholder:text-outline focus:outline-none" placeholder="Type your response or prompt Elena..." type="text"/>
+                    <button type="submit" class="p-2 rounded-lg bg-primary text-on-primary hover:bg-primary-container active:scale-95 transition-all shrink-0">
                       <span class="material-symbols-outlined text-[18px]">send</span>
                     </button>
                   </div>
@@ -625,37 +1028,30 @@
               <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-4 sm:p-5 shadow-sm flex flex-col gap-3">
                 <div class="flex items-center justify-between">
                   <span class="text-[11px] font-bold uppercase tracking-wider text-outline">Incident Context</span>
-                  <span id="ticket-id-tag" class="px-2 py-0.5 rounded bg-surface-container-high text-primary font-code text-xs font-semibold">--</span>
+                  <span class="px-2 py-0.5 rounded bg-surface-container-high text-primary font-code text-xs font-semibold" x-text="currentTicket ? currentTicket.ticket_id : '--'"></span>
                 </div>
                 <div>
-                  <h3 id="ticket-title-display" class="font-bold text-sm text-on-surface">--</h3>
-                  <p id="ticket-desc-display" class="text-xs text-on-surface-variant mt-0.5">--</p>
+                  <h3 class="font-bold text-sm text-on-surface" x-text="currentTicket ? currentTicket.subject : 'No Active Incident'"></h3>
+                  <p class="text-xs text-on-surface-variant mt-0.5" x-text="currentTicket ? currentTicket.description : 'Submit a ticket to stage triage telemetry for specialist review.'"></p>
                 </div>
                 <div class="grid grid-cols-2 gap-2 pt-1">
                   <div class="bg-surface-container-low rounded-xl p-2.5 flex flex-col">
                     <span class="text-[10px] text-outline uppercase font-semibold">Priority</span>
-                    <span id="ticket-priority-display" class="text-xs font-bold text-error flex items-center gap-1 mt-0.5">
-                      <span class="w-2 h-2 rounded-full bg-error"></span> High
+                    <span
+                      class="text-xs font-bold flex items-center gap-1 mt-0.5"
+                      :class="currentTicket ? (isHighPriority(currentTicket.priority) ? 'text-error' : 'text-primary') : 'text-outline'"
+                    >
+                      <span
+                        class="w-2 h-2 rounded-full"
+                        :class="currentTicket ? (isHighPriority(currentTicket.priority) ? 'bg-error' : 'bg-primary') : 'bg-outline'"
+                      ></span>
+                      <span x-text="currentTicket ? (currentTicket.priority || '').toUpperCase() : 'None'"></span>
                     </span>
                   </div>
                   <div class="bg-surface-container-low rounded-xl p-2.5 flex flex-col">
                     <span class="text-[10px] text-outline uppercase font-semibold">Assigned Desk</span>
-                    <span id="ticket-desk-display" class="text-xs font-bold text-on-surface mt-0.5">--</span>
+                    <span class="text-xs font-bold text-on-surface mt-0.5" x-text="currentTicket ? currentTicket.assigned_desk : 'Standby'"></span>
                   </div>
-                </div>
-              </div>
-
-              <!-- Tool Telemetry Inspector -->
-              <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-4 sm:p-5 shadow-sm flex flex-col gap-3">
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-1.5">
-                    <span class="material-symbols-outlined text-[18px] text-primary">terminal</span>
-                    <span class="text-xs font-bold uppercase tracking-wider text-on-surface">Tool Call Telemetry</span>
-                  </div>
-                  <span id="tool-counter-badge" class="font-code text-[11px] text-outline">0 calls</span>
-                </div>
-                <div id="tool-telemetry-container" class="flex flex-col gap-2 max-h-56 overflow-y-auto">
-                  <div class="text-xs text-outline italic text-center py-4">Awaiting function calls (e.g., lookup_transaction, freeze_card)...</div>
                 </div>
               </div>
 
@@ -663,22 +1059,56 @@
               <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-4 sm:p-5 shadow-sm flex flex-col gap-3">
                 <div class="flex items-center justify-between">
                   <span class="text-xs font-bold text-on-surface">Audio Diagnostics</span>
-                  <span class="material-symbols-outlined material-symbols-filled text-secondary text-[18px]">check_circle</span>
+                  <span
+                    class="material-symbols-outlined material-symbols-filled text-[18px]"
+                    :class="mic.status === 'ready' ? 'text-secondary' : 'text-error'"
+                    x-text="mic.status === 'ready' ? 'check_circle' : 'error'"
+                  ></span>
                 </div>
+
+                <div class="flex flex-col gap-1.5">
+                  <div class="flex items-center justify-between">
+                    <label class="text-[10px] text-outline uppercase font-semibold">Microphone Source</label>
+                    <button @click="detectMicrophones()" title="Re-scan devices" class="text-outline hover:text-primary transition-colors">
+                      <span class="material-symbols-outlined text-[16px]" :class="mic.status === 'detecting' ? 'animate-spin' : ''">refresh</span>
+                    </button>
+                  </div>
+
+                  <select
+                    x-show="mic.devices.length > 0"
+                    x-model="mic.selectedId"
+                    :disabled="voice.connected"
+                    class="w-full px-3 py-2 bg-surface-container-low text-on-surface rounded-lg text-xs focus:ring-2 focus:ring-primary focus:outline-none disabled:opacity-60"
+                  >
+                    <template x-for="device in mic.devices" :key="device.deviceId">
+                      <option :value="device.deviceId" x-text="device.label"></option>
+                    </template>
+                  </select>
+
+                  <div
+                    x-show="mic.devices.length === 0"
+                    class="text-[11px] px-2.5 py-2 rounded-lg flex items-center gap-1.5"
+                    :class="mic.status === 'detecting' ? 'bg-surface-container-low text-outline' : 'bg-error-container text-on-error-container'"
+                  >
+                    <span class="material-symbols-outlined text-[14px]" x-text="mic.status === 'detecting' ? 'sync' : 'mic_off'"></span>
+                    <span x-text="micStatusLabel()"></span>
+                  </div>
+                </div>
+
                 <div class="space-y-2 text-xs">
                   <div class="flex items-center justify-between text-on-surface-variant">
                     <span>Input Driver</span>
-                    <span class="font-semibold text-on-surface">16kHz Int16 Mono PCM</span>
+                    <span class="font-semibold text-on-surface">24kHz Int16 Mono PCM</span>
                   </div>
                   <div class="flex items-center justify-between text-on-surface-variant">
                     <span>VAD Gate / Energy</span>
-                    <span id="mic-energy-meter" class="font-code text-secondary font-semibold">0.0 RMS</span>
+                    <span class="font-code text-secondary font-semibold" x-text="`${voice.rms.toFixed(1)} RMS`"></span>
                   </div>
                   <div class="w-full bg-surface-container-high rounded-full h-1.5 overflow-hidden">
-                    <div id="mic-energy-bar" class="bg-secondary h-full w-0 transition-all duration-75"></div>
+                    <div class="bg-secondary h-full transition-all duration-75" :style="`width: ${Math.min(100, voice.rms * 1.8)}%`"></div>
                   </div>
                 </div>
-                <button onclick="testMicHardware()" id="testMicBtn" class="w-full py-2 px-3 rounded-xl bg-surface-container-low hover:bg-surface-container font-semibold text-xs text-on-surface transition-colors">
+                <button @click="testMicHardware()" :class="micTestBtnClass()" x-text="micTest.label">
                   Test Microphone Input
                 </button>
               </div>
@@ -691,18 +1121,11 @@
 
   <footer class="w-full bg-surface-container-lowest border-t border-outline-variant/30 py-3 px-6 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-on-surface-variant">
     <div class="flex items-center gap-3">
-      <span>© 2026 OmniPulse Global Support Operations.</span>
+      <span>© 2026 Wavelink Mobile Customer Care.</span>
       <span>•</span>
-      <!-- <span class="font-code text-[11px] text-outline">v4.18.2-prod</span> -->
     </div>
-    <div class="flex items-center gap-4 text-xs font-medium">
-      <!-- <a href="#ticket-queue" onclick="showToast('Security Policy', 'SOC-2 Type II audit report available on demand.', 'info')" class="hover:text-primary transition-colors">Security Policy</a> -->
-      <!-- <a href="#ticket-queue" onclick="showToast('Trust Center', 'All endpoints encrypted via TLS 1.3 + WSS.', 'info')" class="hover:text-primary transition-colors">Trust Center</a> -->
-      <!-- <a href="tel:18006664457" class="hover:text-primary transition-colors">Incident Hotline</a> -->
-    </div>
+    <div class="flex items-center gap-4 text-xs font-medium"></div>
   </footer>
 
-  <script src="/static/js/audio.js"></script>
-  <script src="/static/js/app.js"></script>
 </body>
 </html>

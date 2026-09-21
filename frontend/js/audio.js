@@ -1,9 +1,9 @@
 /**
- * audio.js — Encapsulates Web Audio API, PCM 16kHz capture,
+ * audio.js — Encapsulates Web Audio API, PCM 24kHz capture,
  * gapless buffer scheduling, and interruption flushing.
  */
 class VoiceAudioEngine {
-  constructor(sampleRate = 16000) {
+  constructor(sampleRate = 24000) {
     this.sampleRate = sampleRate;
     this.audioCtx = null;
     this.micStream = null;
@@ -28,22 +28,56 @@ class VoiceAudioEngine {
     }
   }
 
-  async startMicrophone(onAudioChunk, onRmsUpdate) {
+  /**
+   * Detects the microphones attached to the system. Device labels are only
+   * populated by the browser once permission has been granted at least once,
+   * so this briefly opens and immediately closes a mic stream when needed.
+   * Throws Error("NO_MICROPHONE") if the system has no audio input device.
+   */
+  async listInputDevices() {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      throw new Error("UNSUPPORTED");
+    }
+
+    let devices = await navigator.mediaDevices.enumerateDevices();
+    let inputs = devices.filter((d) => d.kind === "audioinput");
+
+    if (inputs.length === 0) {
+      throw new Error("NO_MICROPHONE");
+    }
+
+    if (inputs.every((d) => !d.label)) {
+      const probeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      probeStream.getTracks().forEach((t) => t.stop());
+
+      devices = await navigator.mediaDevices.enumerateDevices();
+      inputs = devices.filter((d) => d.kind === "audioinput");
+    }
+
+    return inputs.map((d, i) => ({
+      deviceId: d.deviceId,
+      label: d.label || `Microphone ${i + 1}`,
+    }));
+  }
+
+  async startMicrophone(onAudioChunk, onRmsUpdate, deviceId = null) {
     await this.initialize();
 
     this.micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
+        deviceId: deviceId ? { exact: deviceId } : undefined,
         channelCount: 1,
         sampleRate: this.sampleRate,
         echoCancellation: true,
         noiseSuppression: true,
+        autoGainControl: true,
       },
     });
 
     const micSource = this.audioCtx.createMediaStreamSource(this.micStream);
     micSource.connect(this.analyserNode);
 
-    // 2048 samples @ 16kHz = ~128ms frames
+    // 2048 samples @ 24kHz = ~85ms frames
     this.processorNode = this.audioCtx.createScriptProcessor(2048, 1, 1);
 
     this.processorNode.onaudioprocess = (e) => {

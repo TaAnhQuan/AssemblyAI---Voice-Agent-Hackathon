@@ -78,7 +78,15 @@ async def serve_index():
 
 @app.post("/api/auth/register")
 async def api_register(payload: AuthPayload):
-    res = register_user(payload.email, payload.name or payload.email.split("@")[0], payload.password)
+    # Every db.py call below runs synchronous sqlite3 I/O (and, for auth,
+    # CPU-bound PBKDF2 hashing) — offloaded to a worker thread so it can't
+    # block the single asyncio event loop that all concurrent WebSocket voice
+    # sessions and HTTP requests share. Under concurrent load this is the
+    # difference between one slow DB write stalling every open call and it
+    # only stalling its own request.
+    res = await asyncio.to_thread(
+        register_user, payload.email, payload.name or payload.email.split("@")[0], payload.password
+    )
     if not res["success"]:
         raise HTTPException(status_code=400, detail=res["error"])
     return res
@@ -86,7 +94,7 @@ async def api_register(payload: AuthPayload):
 
 @app.post("/api/auth/login")
 async def api_login(payload: AuthPayload):
-    res = authenticate_user(payload.email, payload.password)
+    res = await asyncio.to_thread(authenticate_user, payload.email, payload.password)
     if not res["success"]:
         raise HTTPException(status_code=401, detail=res["error"])
     return res
@@ -99,7 +107,8 @@ async def favicon():
 
 @app.post("/api/tickets")
 async def api_create_ticket(payload: TicketPayload):
-    ticket = create_ticket(
+    ticket = await asyncio.to_thread(
+        create_ticket,
         user_email=payload.user_email,
         subject=payload.subject,
         description=payload.description,
@@ -110,14 +119,14 @@ async def api_create_ticket(payload: TicketPayload):
 
 @app.get("/api/tickets/list")
 async def api_list_tickets(email: Optional[str] = None, status: Optional[str] = None):
-    tickets = get_tickets(email, status)
+    tickets = await asyncio.to_thread(get_tickets, email, status)
     return {"tickets": tickets}
 
 
 @app.patch("/api/tickets/{ticket_id}/status")
 async def api_update_ticket_status(ticket_id: str, payload: TicketStatusPayload):
     try:
-        ticket = update_ticket_status(ticket_id, payload.status)
+        ticket = await asyncio.to_thread(update_ticket_status, ticket_id, payload.status)
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err))
 
@@ -128,13 +137,14 @@ async def api_update_ticket_status(ticket_id: str, payload: TicketStatusPayload)
 
 @app.get("/api/tickets/latest")
 async def api_get_latest_ticket(email: str):
-    ticket = get_latest_ticket_for_user(email)
+    ticket = await asyncio.to_thread(get_latest_ticket_for_user, email)
     return {"ticket": ticket}
 
 
 @app.get("/api/tickets/{ticket_id}/transcripts")
 async def api_get_ticket_transcripts(ticket_id: str):
-    return {"transcripts": get_transcripts_for_ticket(ticket_id)}
+    transcripts = await asyncio.to_thread(get_transcripts_for_ticket, ticket_id)
+    return {"transcripts": transcripts}
 
 
 # ============================================================================
@@ -358,14 +368,14 @@ async def _handle_aai_event(
             if text:
                 await client_ws.send_text(json.dumps({"type": "transcript", "role": "user", "text": text}))
                 if ticket_code and user_email:
-                    save_transcript_line(ticket_code, user_email, "user", text)
+                    await asyncio.to_thread(save_transcript_line, ticket_code, user_email, "user", text)
 
         elif etype == "transcript.agent":
             text = event.get("text")
             if text:
                 await client_ws.send_text(json.dumps({"type": "transcript", "role": "agent", "text": text}))
                 if ticket_code and user_email:
-                    save_transcript_line(ticket_code, user_email, "agent", text)
+                    await asyncio.to_thread(save_transcript_line, ticket_code, user_email, "agent", text)
             if event.get("interrupted"):
                 await client_ws.send_text(json.dumps({"type": "interruption"}))
 
@@ -517,7 +527,7 @@ async def run_mock_voice_agent(
         "text": greeting_text,
     }))
     if ticket_code and user_email:
-        save_transcript_line(ticket_code, user_email, "agent", greeting_text)
+        await asyncio.to_thread(save_transcript_line, ticket_code, user_email, "agent", greeting_text)
     await client_ws.send_bytes(generate_pcm_tone())
 
     has_demo_tool = "check_network_status" in persona["tool_names"]
@@ -551,7 +561,7 @@ async def run_mock_voice_agent(
                 "text": reply_text,
             }))
             if ticket_code and user_email:
-                save_transcript_line(ticket_code, user_email, "agent", reply_text)
+                await asyncio.to_thread(save_transcript_line, ticket_code, user_email, "agent", reply_text)
             await client_ws.send_bytes(generate_pcm_tone(duration=1.2, freq=300.0))
 
 
@@ -566,11 +576,11 @@ async def voice_relay(client_ws: WebSocket):
 
     # Pull the actual ticket (subject/description) so the greeting/prompt can
     # reference the caller's real reported problem instead of a generic line.
-    ticket = get_ticket_by_code(ticket_code) if ticket_code else None
+    ticket = await asyncio.to_thread(get_ticket_by_code, ticket_code) if ticket_code else None
     # Pull every transcript line ever recorded against this ticket — from
     # this call's prior sessions — so the agent picks up with full context
     # instead of starting cold on a repeat call.
-    prior_transcripts = get_transcripts_for_ticket(ticket_code) if ticket_code else []
+    prior_transcripts = await asyncio.to_thread(get_transcripts_for_ticket, ticket_code) if ticket_code else []
     print(
         f"[Voice Session] category={category!r} ticket={ticket_code!r} "
         f"has_ticket_context={bool(ticket)} prior_lines={len(prior_transcripts)} "

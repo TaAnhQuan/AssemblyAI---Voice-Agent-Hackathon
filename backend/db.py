@@ -10,8 +10,14 @@ from typing import Dict, Any, Optional
 DB_PATH = Path(__file__).resolve().parent / "users.db"
 
 def get_db():
-    conn = sqlite3.connect(str(DB_PATH))
+    # timeout: wait up to 30s for a lock instead of raising "database is
+    # locked" immediately — matters once concurrent callers are all writing
+    # transcript lines at once. WAL lets readers proceed without blocking on
+    # a writer (and vice versa), which plain "rollback journal" mode doesn't.
+    conn = sqlite3.connect(str(DB_PATH), timeout=30)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 TICKET_STATUSES = {"OPEN", "CLOSED"}

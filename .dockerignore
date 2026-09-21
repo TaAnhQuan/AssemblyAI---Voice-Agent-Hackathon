@@ -1,0 +1,12 @@
+**/__pycache__/
+**/*.pyc
+backend/users.db
+backend/users.db-wal
+backend/users.db-shm
+# Contains a real ASSEMBLYAI_API_KEY — must never be baked into an image
+# layer. Pass secrets at `docker run` time via -e/--env-file instead.
+backend/.env
+.git/
+.gitignore
+*.md
+loadtest/

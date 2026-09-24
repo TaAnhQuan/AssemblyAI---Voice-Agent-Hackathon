@@ -1,0 +1,8 @@
+{
+  "buildCommand": false,
+  "outputDirectory": "frontend",
+  "rewrites": [
+    { "source": "/static/css/(.*)", "destination": "/css/$1" },
+    { "source": "/static/js/(.*)", "destination": "/js/$1" }
+  ]
+}

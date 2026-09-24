@@ -24,6 +24,7 @@ from model.ticket_status_payload import TicketStatusPayload
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi import Response
 from fastapi.staticfiles import StaticFiles
@@ -32,13 +33,30 @@ import websockets
 from db import (
     authenticate_user, register_user, create_ticket, get_latest_ticket_for_user,
     get_ticket_by_code, get_tickets, update_ticket_status, save_transcript_line,
-    get_transcripts_for_ticket,
+    get_transcripts_for_ticket, request_human_callback, cancel_human_callback,
+    get_account_by_email,
 )
 from support_tools import TOOL_DEFINITIONS, execute_tool
 
 load_dotenv()
 
 app = FastAPI(title="Wavelink Mobile Voice Support Server")
+
+# When the frontend is deployed separately from this backend (e.g. frontend
+# on Vercel, backend on Railway), browsers enforce CORS on the REST calls —
+# WebSocket connections aren't subject to CORS, but ARE subject to the
+# Origin check FastAPI's WebSocket route can do if added later, so this is
+# also the single place to widen that if needed. Comma-separated list of
+# allowed origins; "*" (the default) is fine for a testing/demo deployment
+# but should be narrowed to the actual Vercel URL before wider use.
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Configuration
 ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
@@ -85,7 +103,7 @@ async def api_register(payload: AuthPayload):
     # difference between one slow DB write stalling every open call and it
     # only stalling its own request.
     res = await asyncio.to_thread(
-        register_user, payload.email, payload.name or payload.email.split("@")[0], payload.password
+        register_user, payload.email, payload.name or payload.email.split("@")[0], payload.password, payload.phone_number
     )
     if not res["success"]:
         raise HTTPException(status_code=400, detail=res["error"])
@@ -134,6 +152,21 @@ async def api_update_ticket_status(ticket_id: str, payload: TicketStatusPayload)
         raise HTTPException(status_code=404, detail=f"No ticket found with id '{ticket_id}'.")
 
     return ticket
+
+@app.post("/api/tickets/{ticket_id}/request-human")
+async def api_request_human_callback(ticket_id: str):
+    ticket = await asyncio.to_thread(request_human_callback, ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail=f"No ticket found with id '{ticket_id}'.")
+    return ticket
+
+@app.post("/api/tickets/{ticket_id}/cancel-human")
+async def api_cancel_human_callback(ticket_id: str):
+    ticket = await asyncio.to_thread(cancel_human_callback, ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail=f"No ticket found with id '{ticket_id}'.")
+    return ticket
+
 
 @app.get("/api/tickets/latest")
 async def api_get_latest_ticket(email: str):
@@ -215,20 +248,30 @@ MAYA_PERSONA = {
     "voice": "eve",
     "system_prompt": (
         "You are Maya, a friendly customer support agent for Wavelink Mobile. "
-        "Keep replies under 2 sentences. Use check_network_status before "
-        "troubleshooting a connectivity complaint, and confirm the account "
-        "before using restart_connection. "
-        "When the issue is resolved, the caller says goodbye, or there is "
-        "nothing further you can help with, you must first tell the caller "
-        "in that same reply that you're ending the call now (briefly summarize "
-        "the resolution and say goodbye), and only then call the end_call tool. "
-        "Never call end_call without first notifying the caller in speech."
+        "Keep replies under 2 sentences.\n\n"
+        "RULE — ask once, then act: ask for any single piece of information or "
+        "confirmation at most once per call. The instant the caller answers it, "
+        "treat it as settled and act — call the relevant tool in that same turn, "
+        "never repeat the question, and never say you are about to do something "
+        "without actually doing it in that same turn.\n\n"
+        "Tools:\n"
+        "- check_network_status: use for a connectivity complaint happening right now.\n"
+        "- check_incident_history: use when the caller asks about a past/earlier outage "
+        "(e.g. 'yesterday's outage') instead of a live issue — if it's already resolved, "
+        "say so plainly and share the summary.\n"
+        "- restart_connection: needs the caller's phone number. If you already have it "
+        "(given as context below, or stated earlier this call), call the tool immediately — "
+        "do not ask for it again. Otherwise ask for it once, then call the tool as soon as "
+        "they answer.\n"
+        "- end_call: only after you have already told the caller, in that same reply, that "
+        "the issue is resolved (or you can't help further) and said goodbye — never call it "
+        "silently."
     ),
     "greeting": "Hi, this is Maya from Wavelink Mobile support. How can I help with your service today?",
     "keyterms": ["SIM", "roaming", "data plan", "outage", "porting", "Wavelink"],
     # Billing/account tools land in a later pass — this starts with the
     # network/connectivity tools since that's the first increment requested.
-    "tool_names": ["check_network_status", "restart_connection", "end_call"],
+    "tool_names": ["check_network_status", "check_incident_history", "restart_connection", "end_call"],
 }
 
 PERSONAS = {
@@ -259,14 +302,37 @@ def build_session_update(
     persona: Dict[str, Any],
     ticket: Optional[Dict[str, Any]] = None,
     prior_transcripts: Optional[list] = None,
+    account: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Injects the caller's actual ticket (subject/description) and, if this
     isn't the first call on it, the prior conversation history into the
     persona's prompt and greeting — so Maya opens by restating the reported
     problem (first call) or picking up where the last call left off (repeat
-    call), instead of starting from zero every time."""
+    call), instead of starting from zero every time. Also injects the
+    caller's phone number/account (when known) so Maya already has it for
+    restart_connection instead of having to ask for it on every call."""
     system_prompt = persona["system_prompt"]
     greeting = persona["greeting"]
+
+    # Context blocks below state facts for Maya to use — the "ask once, then
+    # act" rule already lives once in the base persona prompt above, so
+    # these deliberately don't restate it; piling redundant copies of the
+    # same rule into the prompt bloats it and risks the model getting stuck
+    # rather than following it (observed empty replies from AssemblyAI when
+    # the prompt got large and repetitive during earlier iterations of this
+    # function).
+    if account and account.get("phone_number"):
+        location_note = (
+            f" Their line is associated with {account['location']}."
+            if account.get("location") else ""
+        )
+        system_prompt = (
+            f"{system_prompt}\n\n"
+            f"CONTEXT — caller's account: phone {account['phone_number']}, "
+            f"name {account.get('customer_name', 'unknown')}, plan {account.get('plan', 'unknown')}, "
+            f"5G enabled: {account.get('5g_enabled')}.{location_note} "
+            f"This is already on file — do not ask the caller for their phone number."
+        )
 
     history_text = format_transcript_history(prior_transcripts or [])
 
@@ -275,14 +341,17 @@ def build_session_update(
 
         system_prompt = (
             f"{system_prompt}\n\n"
-            f"The caller has called before about this same ticket (subject: \"{subject}\"). "
-            f"Here is the transcript of the previous conversation(s), oldest first:\n"
+            f"CONTEXT — this caller has called before about ticket \"{subject}\". "
+            f"Prior conversation (oldest first), your memory of what was already "
+            f"discussed or promised — do not ask the caller to repeat anything in it:\n"
             f"---\n{history_text}\n---\n"
-            f"Use this history as your memory of what was already discussed, tried, or "
-            f"promised — do not ask the caller to repeat information already in it. Your "
-            f"very first turn must greet the caller, briefly acknowledge you're following up "
-            f"on the previous conversation, and ask if the issue is still happening or if "
-            f"anything has changed, before continuing troubleshooting."
+            f"Your first turn: greet them, mention you're following up, and ask if the "
+            f"issue is still happening or anything's changed. As soon as they answer that "
+            f"(e.g. 'yes it's still happening' or 'can you check it'), immediately act in "
+            f"that same reply — call check_network_status for their area if you don't "
+            f"already know the status, or move straight to troubleshooting. Do not just "
+            f"acknowledge their answer; always follow it with a concrete next step or tool "
+            f"call in the same turn."
         )
         greeting = (
             f"Hi, this is {persona['name']} from Wavelink Mobile support, following up on "
@@ -295,12 +364,13 @@ def build_session_update(
 
         system_prompt = (
             f"{system_prompt}\n\n"
-            f"The caller already submitted a support ticket before this call. "
-            f"Ticket subject: \"{subject}\". "
-            f"Ticket description: \"{description}\". "
-            f"Your very first turn must greet the caller AND restate this problem in your "
-            f"own words, then ask them to confirm it's still accurate or if anything has "
-            f"changed. Do not start troubleshooting until they confirm."
+            f"CONTEXT — caller's filed ticket: subject \"{subject}\", description "
+            f"\"{description}\". Your first turn: greet them, restate this problem in "
+            f"your own words, and ask them to confirm it's still accurate or if "
+            f"anything's changed. As soon as they confirm, immediately act in that same "
+            f"reply — call the relevant tool (check_network_status, restart_connection, "
+            f"etc.) rather than just acknowledging their answer. Never leave a confirmed "
+            f"problem without a concrete next step or tool call in the same turn."
         )
         greeting = (
             f"Hi, this is {persona['name']} from Wavelink Mobile support. "
@@ -335,6 +405,12 @@ async def _next_client_audio_chunk(client_ws: WebSocket) -> Optional[bytes]:
     return msg.get("bytes")
 
 
+# Bounded retries for the stuck-turn safety net below — high enough to
+# recover from an occasional dropped turn, low enough that a genuinely
+# broken session gives up and tells the caller instead of nudging forever.
+STUCK_TURN_MAX_RETRIES = 2
+
+
 async def _handle_aai_event(
     raw: Any,
     client_ws: WebSocket,
@@ -358,10 +434,16 @@ async def _handle_aai_event(
     etype = event.get("type")
 
     try:
-        if etype == "reply.audio":
-            data = event.get("data")
-            if data:
-                await client_ws.send_bytes(base64.b64decode(data))
+        if etype == "reply.started":
+            call_state["reply_had_content"] = False
+            call_state["tool_called_this_turn"] = False
+
+        elif etype in ("reply.audio", "transcript.agent.delta"):
+            call_state["reply_had_content"] = True
+            if etype == "reply.audio":
+                data = event.get("data")
+                if data:
+                    await client_ws.send_bytes(base64.b64decode(data))
 
         elif etype == "transcript.user":
             text = event.get("text")
@@ -380,10 +462,13 @@ async def _handle_aai_event(
                 await client_ws.send_text(json.dumps({"type": "interruption"}))
 
         elif etype == "tool.call":
+            call_state["tool_called_this_turn"] = True
             call_id = event.get("call_id")
             name = event.get("name")
             arguments = event.get("arguments", {})
+            print(f"[Tool Call] name={name!r} call_id={call_id!r} arguments={arguments!r}")
             if not call_id or not name:
+                print(f"[Tool Call] dropped — missing call_id or name in event: {event!r}")
                 return
 
             await client_ws.send_text(json.dumps({
@@ -393,6 +478,7 @@ async def _handle_aai_event(
 
             result = execute_tool(name, arguments)
             pending_tool_results[call_id] = result
+            print(f"[Tool Call] executed name={name!r} call_id={call_id!r} result={result!r}")
             await client_ws.send_text(json.dumps({
                 "type": "tool_response", "call_id": call_id, "output": result,
             }))
@@ -408,16 +494,71 @@ async def _handle_aai_event(
         elif etype == "reply.done":
             # Voice Agent API requires tool.result to be sent only once the
             # turn that raised the tool.call has finished replying.
+            had_content = call_state.get("reply_had_content", True)
+            print(
+                f"[Reply Done] status={event.get('status')!r} "
+                f"pending_tool_results={list(pending_tool_results.keys())!r} had_content={had_content}"
+            )
+            # Stuck-turn safety net: AssemblyAI's Voice Agent API exposes no
+            # tool_choice/forced-tool-use or model-tuning knobs (confirmed
+            # against their docs), so a turn that completes with no speech,
+            # no audio, and no tool call can't be prevented client-side —
+            # only recovered from. Rather than pattern-matching specific
+            # phrases the model might say (a losing game — any new stuck
+            # scenario needs its own detector), this generically nudges the
+            # model to continue on ANY empty turn, with a bounded retry count
+            # so a genuinely broken session degrades to a clear apology
+            # instead of nudging forever.
+            is_stuck_turn = (
+                event.get("status") != "interrupted"
+                and not had_content
+                and not pending_tool_results
+                and not call_state.get("tool_called_this_turn")
+            )
+
+            if is_stuck_turn:
+                call_state["stuck_turn_count"] = call_state.get("stuck_turn_count", 0) + 1
+                stuck_count = call_state["stuck_turn_count"]
+                print(f"[Reply Done] WARNING: empty reply detected (no content, no tool call) — stuck_turn_count={stuck_count}.")
+
+                if stuck_count <= STUCK_TURN_MAX_RETRIES:
+                    print(f"[Safety Net] Nudging agent to continue (attempt {stuck_count}/{STUCK_TURN_MAX_RETRIES}).")
+                    await aai_ws.send(json.dumps({
+                        "type": "reply.create",
+                        "instructions": (
+                            "Your last turn produced no response. Continue the conversation now: "
+                            "respond to what the caller just said, and take the appropriate next "
+                            "action — call a tool if one applies — instead of staying silent."
+                        ),
+                    }))
+                else:
+                    # Repeated nudges didn't help — this session is stuck for
+                    # a reason a prompt nudge can't fix. Say so plainly and
+                    # stop nudging, rather than looping forever.
+                    print(f"[Safety Net] Exceeded {STUCK_TURN_MAX_RETRIES} retries — giving up on nudging, forcing a spoken apology.")
+                    await aai_ws.send(json.dumps({
+                        "type": "reply.create",
+                        "instructions": (
+                            "Apologize briefly for the delay, and ask the caller to repeat "
+                            "what they need help with."
+                        ),
+                    }))
+                    call_state["stuck_turn_count"] = 0  # give the retry budget back for the next issue
+            else:
+                call_state["stuck_turn_count"] = 0
+
             if event.get("status") == "interrupted":
                 pending_tool_results.clear()
                 call_state["hangup_pending"] = False
             else:
                 for call_id, result in pending_tool_results.items():
-                    await aai_ws.send(json.dumps({
+                    payload = {
                         "type": "tool.result",
                         "call_id": call_id,
                         "result": json.dumps(result),
-                    }))
+                    }
+                    print(f"[Tool Result] sending to AssemblyAI: {payload!r}")
+                    await aai_ws.send(json.dumps(payload))
                 pending_tool_results.clear()
 
                 if call_state.get("hangup_pending"):
@@ -433,8 +574,47 @@ async def _handle_aai_event(
         elif etype == "session.ended":
             print(f"[AssemblyAI Session Ended]: {event}")
 
-    except Exception as exc:
+        else:
+            # Not necessarily a problem — the Voice Agent API sends other
+            # event types (e.g. reply.started) this relay doesn't need to
+            # act on — but logging them makes a stuck-call investigation
+            # possible instead of guessing blind at what AssemblyAI sent.
+            print(f"[AssemblyAI Event] unhandled type={etype!r} event={event!r}")
+
+    except RuntimeError as exc:
+        # Starlette raises this specific RuntimeError from client_ws.send_*
+        # once the browser side has disconnected (close frame already sent).
+        # Once that's happened, EVERY subsequent AssemblyAI event will fail
+        # the same way — re-raise so aai_to_client()'s loop notices and stops
+        # relaying entirely, instead of catching this per-event and retrying
+        # forever until AssemblyAI's own session eventually ends (each
+        # failure logging a full traceback in the meantime).
+        if "close message has been sent" in str(exc):
+            raise
         print(f"[Voice Event Handling Error] type={etype!r}: {exc}")
+        try:
+            await client_ws.send_text(json.dumps({
+                "type": "voice_warning",
+                "message": f"Voice session error while handling '{etype}': {exc}",
+            }))
+        except Exception:
+            pass
+
+    except Exception as exc:
+        import traceback
+        print(f"[Voice Event Handling Error] type={etype!r}: {exc}")
+        traceback.print_exc()
+        # Without this, a failure here (e.g. sending tool.result after
+        # AssemblyAI already closed its side) was swallowed silently —
+        # the call would just go dead with no audio/transcripts and no
+        # indication to the caller of what happened.
+        try:
+            await client_ws.send_text(json.dumps({
+                "type": "voice_warning",
+                "message": f"Voice session error while handling '{etype}': {exc}",
+            }))
+        except Exception:
+            pass
 
 
 async def run_live_voice_agent(
@@ -444,19 +624,38 @@ async def run_live_voice_agent(
     user_email: Optional[str],
     ticket: Optional[Dict[str, Any]] = None,
     prior_transcripts: Optional[list] = None,
+    account: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Relays audio/events between the browser and AssemblyAI's Voice Agent API,
     translating the wire protocol into the simpler shape app.js understands."""
     headers = {"Authorization": f"Bearer {ASSEMBLYAI_API_KEY}"}
 
     async with websockets.connect(ASSEMBLYAI_VOICE_AGENT_URL, additional_headers=headers) as aai_ws:
-        await aai_ws.send(json.dumps(build_session_update(persona, ticket, prior_transcripts)))
+        session_update = build_session_update(persona, ticket, prior_transcripts, account)
+        resolved_prompt = session_update["session"]["system_prompt"]
+        print(
+            f"[Voice Session] resolved system_prompt "
+            f"({len(resolved_prompt)} chars, {len(resolved_prompt.split())} words):\n{resolved_prompt}"
+        )
+        await aai_ws.send(json.dumps(session_update))
 
         pending_tool_results: Dict[str, Any] = {}
         # Shared with _handle_aai_event: set when the agent calls end_call,
         # and flipped to should_close once that turn's reply.done confirms
-        # the goodbye has fully been relayed to the browser.
-        call_state: Dict[str, Any] = {"hangup_pending": False, "should_close": False}
+        # the goodbye has fully been relayed to the browser. "account" is
+        # carried here (rather than as its own function param everywhere)
+        # so the stuck-turn safety net below can look up the caller's phone
+        # number without needing a wider signature change.
+        call_state: Dict[str, Any] = {
+            "hangup_pending": False,
+            "should_close": False,
+            "account": account,
+            "tool_called_this_turn": False,
+            # Consecutive stuck (empty, no-tool-call) turns — bounded so a
+            # model that's truly stuck (not just needing one nudge) doesn't
+            # loop the reply.create nudge forever; see STUCK_TURN_MAX_RETRIES.
+            "stuck_turn_count": 0,
+        }
 
         async def client_to_aai():
             while True:
@@ -473,6 +672,7 @@ async def run_live_voice_agent(
 
         async def aai_to_client():
             agent_hung_up = False
+            client_disconnected = False
             try:
                 async for raw in aai_ws:
                     await _handle_aai_event(raw, client_ws, pending_tool_results, aai_ws, ticket_code, user_email, call_state)
@@ -481,6 +681,19 @@ async def run_live_voice_agent(
                         break
             except websockets.exceptions.ConnectionClosed:
                 pass
+            except RuntimeError as exc:
+                # Re-raised from _handle_aai_event once the browser side has
+                # already closed — stop relaying immediately instead of
+                # continuing to iterate aai_ws and failing on every single
+                # subsequent event (audio chunks included) for the rest of
+                # that AssemblyAI turn.
+                if "close message has been sent" not in str(exc):
+                    raise
+                client_disconnected = True
+                print("[Voice Session] client_ws already closed — stopping aai_to_client relay.")
+
+            if client_disconnected:
+                return  # nothing left to notify — the browser is already gone
 
             try:
                 if agent_hung_up:
@@ -514,12 +727,13 @@ async def run_mock_voice_agent(
     user_email: Optional[str],
     ticket: Optional[Dict[str, Any]] = None,
     prior_transcripts: Optional[list] = None,
+    account: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Local simulator so the UI can be exercised without an AssemblyAI key.
     Greets the caller, then fires one canned tool-call/response cycle the first
     time it detects real microphone energy in the incoming audio (only for
     personas that actually have check_network_status)."""
-    base_greeting = build_session_update(persona, ticket, prior_transcripts)["session"]["greeting"]
+    base_greeting = build_session_update(persona, ticket, prior_transcripts, account)["session"]["greeting"]
     greeting_text = f"{base_greeting} (mock mode — set ASSEMBLYAI_API_KEY to go live)"
     await client_ws.send_text(json.dumps({
         "type": "transcript",
@@ -581,9 +795,14 @@ async def voice_relay(client_ws: WebSocket):
     # this call's prior sessions — so the agent picks up with full context
     # instead of starting cold on a repeat call.
     prior_transcripts = await asyncio.to_thread(get_transcripts_for_ticket, ticket_code) if ticket_code else []
+    # Pull the caller's linked account (phone number/plan) so Maya has it as
+    # context for tools like restart_connection instead of asking for it —
+    # None for guests or accounts registered before phone numbers existed.
+    account = await asyncio.to_thread(get_account_by_email, user_email) if user_email else None
     print(
         f"[Voice Session] category={category!r} ticket={ticket_code!r} "
         f"has_ticket_context={bool(ticket)} prior_lines={len(prior_transcripts)} "
+        f"has_account={bool(account)} "
         f"-> persona={persona['name']!r} voice={persona['voice']!r}"
     )
 
@@ -594,9 +813,9 @@ async def voice_relay(client_ws: WebSocket):
 
         if MOCK_MODE:
             print("[Voice Session] MOCK mode active (no ASSEMBLYAI_API_KEY or VOICE_MOCK_MODE=true).")
-            await run_mock_voice_agent(client_ws, persona, ticket_code, user_email, ticket, prior_transcripts)
+            await run_mock_voice_agent(client_ws, persona, ticket_code, user_email, ticket, prior_transcripts, account)
         else:
-            await run_live_voice_agent(client_ws, persona, ticket_code, user_email, ticket, prior_transcripts)
+            await run_live_voice_agent(client_ws, persona, ticket_code, user_email, ticket, prior_transcripts, account)
     except WebSocketDisconnect:
         pass
     except Exception as e:

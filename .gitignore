@@ -3,3 +3,16 @@
 .env
 
 plan.md
+.vercel
+
+__pycache__/
+*.pyc
+
+# SQLite dev database — never ship local test data to a deploy. Railway
+# (or wherever the backend runs) creates a fresh users.db on first boot via
+# db.init_db(), backed by a persistent volume so it's the deployment's own
+# real data going forward, not a snapshot of local testing.
+backend/users.db
+backend/users.db-shm
+backend/users.db-wal
+

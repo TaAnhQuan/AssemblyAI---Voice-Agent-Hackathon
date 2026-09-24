@@ -2,6 +2,19 @@
  * app.js — Alpine.js component: state, SPA routing, ticket sync,
  * and live voice/telemetry handling.
  */
+
+// Backend origin for REST + WebSocket calls. Empty string means "same origin
+// as this page" (the original single-server setup). Set window.API_BASE
+// (see index.html) to a full origin like "https://your-app.up.railway.app"
+// when the frontend is deployed separately from the backend (e.g. frontend
+// on Vercel, backend on Railway) — every fetch()/WebSocket call below is
+// built from this instead of a bare relative path.
+const API_BASE = (window.API_BASE || "").replace(/\/$/, "");
+
+function apiUrl(path) {
+  return `${API_BASE}${path}`;
+}
+
 document.addEventListener("alpine:init", () => {
   Alpine.data("omniApp", () => ({
     // --- Routing / Auth ---
@@ -48,6 +61,7 @@ document.addEventListener("alpine:init", () => {
     registerForm: {
       name: "",
       email: "",
+      phoneNumber: "",
       password: "",
       confirmPassword: "",
       showPassword: false,
@@ -154,7 +168,14 @@ document.addEventListener("alpine:init", () => {
       this.view = hash.replace("#", "");
 
       if (hash === "#live-room") {
-        this.fetchLatestTicket().then(() => this.loadTranscriptHistory());
+        // A ticket explicitly staged via openTicketInLiveRoom() must win —
+        // re-fetching "latest" here would silently swap the caller's chosen
+        // ticket for whichever one was created most recently.
+        if (this.currentTicket) {
+          this.loadTranscriptHistory();
+        } else {
+          this.fetchLatestTicket().then(() => this.loadTranscriptHistory());
+        }
         this.detectMicrophones();
       } else if (hash === "#ticket-queue") {
         this.fetchTicketQueue();
@@ -236,7 +257,7 @@ document.addEventListener("alpine:init", () => {
         return;
       }
       try {
-        const res = await fetch(`/api/tickets/latest?email=${encodeURIComponent(this.currentUser.email)}`);
+        const res = await fetch(apiUrl(`/api/tickets/latest?email=${encodeURIComponent(this.currentUser.email)}`));
         if (res.ok) {
           const data = await res.json();
           this.currentTicket = data.ticket || null;
@@ -259,7 +280,7 @@ document.addEventListener("alpine:init", () => {
       const code = this.currentTicket?.ticket_id;
       if (!code) return;
       try {
-        const res = await fetch(`/api/tickets/${encodeURIComponent(code.replace(/^#/, ""))}/transcripts`);
+        const res = await fetch(apiUrl(`/api/tickets/${encodeURIComponent(code.replace(/^#/, ""))}/transcripts`));
         if (!res.ok) return;
         const data = await res.json();
         (data.transcripts || []).forEach((t) => {
@@ -298,7 +319,7 @@ document.addEventListener("alpine:init", () => {
       this.ticketForm.submitting = true;
       try {
         const userEmail = this.currentUser?.email || "guest@omnipulse.internal";
-        const res = await fetch("/api/tickets", {
+        const res = await fetch(apiUrl("/api/tickets"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -351,7 +372,7 @@ document.addEventListener("alpine:init", () => {
         if (this.currentUser?.email) params.set("email", this.currentUser.email);
         params.set("status", this.ticketStatusFilter);
 
-        const res = await fetch(`/api/tickets/list?${params.toString()}`);
+        const res = await fetch(apiUrl(`/api/tickets/list?${params.toString()}`));
         const data = await res.json();
         this.tickets = data.tickets || [];
       } catch (err) {
@@ -381,7 +402,7 @@ document.addEventListener("alpine:init", () => {
     async setTicketStatus(ticket, status) {
       const code = ticket.ticket_id.replace(/^#/, "");
       try {
-        const res = await fetch(`/api/tickets/${encodeURIComponent(code)}/status`, {
+        const res = await fetch(apiUrl(`/api/tickets/${encodeURIComponent(code)}/status`), {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status }),
@@ -423,6 +444,68 @@ document.addEventListener("alpine:init", () => {
 
     reopenTicket(ticket) {
       this.setTicketStatus(ticket, "OPEN");
+    },
+
+    async requestHumanCallback(ticket) {
+      if (!ticket || ticket.human_requested) return;
+      const code = ticket.ticket_id.replace(/^#/, "");
+      try {
+        const res = await fetch(apiUrl(`/api/tickets/${encodeURIComponent(code)}/request-human`), {
+          method: "POST",
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || "Failed to request a human callback.");
+        }
+
+        const updated = await res.json();
+
+        if (this.currentTicket?.ticket_id === updated.ticket_id) {
+          this.currentTicket = updated;
+        }
+        this.tickets = this.tickets.map((t) => (t.ticket_id === updated.ticket_id ? updated : t));
+
+        this.showToast(
+          "Callback Requested",
+          `A specialist will call you back about ${updated.ticket_id} shortly.`,
+          "success"
+        );
+      } catch (err) {
+        console.error("[Human Callback Error]:", err);
+        this.showToast("Request Failed", err.message || "Could not request a human callback.", "error");
+      }
+    },
+
+    async cancelHumanCallback(ticket) {
+      if (!ticket || !ticket.human_requested) return;
+      const code = ticket.ticket_id.replace(/^#/, "");
+      try {
+        const res = await fetch(apiUrl(`/api/tickets/${encodeURIComponent(code)}/cancel-human`), {
+          method: "POST",
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || "Failed to cancel the human callback request.");
+        }
+
+        const updated = await res.json();
+
+        if (this.currentTicket?.ticket_id === updated.ticket_id) {
+          this.currentTicket = updated;
+        }
+        this.tickets = this.tickets.map((t) => (t.ticket_id === updated.ticket_id ? updated : t));
+
+        this.showToast(
+          "Callback Cancelled",
+          `The human callback request for ${updated.ticket_id} was cancelled.`,
+          "info"
+        );
+      } catch (err) {
+        console.error("[Cancel Human Callback Error]:", err);
+        this.showToast("Cancel Failed", err.message || "Could not cancel the human callback request.", "error");
+      }
     },
 
     // ===================================================================
@@ -473,7 +556,17 @@ document.addEventListener("alpine:init", () => {
 
       this.voice.connecting = true;
       try {
-        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        // API_BASE (see apiUrl() above) may point at a separate backend
+        // origin (e.g. frontend on Vercel, backend on Railway) — derive the
+        // ws(s):// URL from that same origin instead of the page's own, or
+        // fall back to same-origin when API_BASE is unset.
+        let wsOrigin;
+        if (API_BASE) {
+          const base = new URL(API_BASE);
+          wsOrigin = `${base.protocol === "https:" ? "wss:" : "ws:"}//${base.host}`;
+        } else {
+          wsOrigin = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
+        }
         // The bound ticket's category picks which persona (name/voice/system
         // prompt/tools) the backend loads for this call — see PERSONAS in server.py.
         const category = this.currentTicket?.category || "";
@@ -482,7 +575,7 @@ document.addEventListener("alpine:init", () => {
         if (this.currentTicket?.ticket_id) params.set("ticket", this.currentTicket.ticket_id.replace(/^#/, ""));
         if (this.currentUser?.email) params.set("email", this.currentUser.email);
         const query = params.toString();
-        const wsUrl = `${protocol}//${window.location.host}/ws/voice${query ? `?${query}` : ""}`;
+        const wsUrl = `${wsOrigin}/ws/voice${query ? `?${query}` : ""}`;
         const socket = new WebSocket(wsUrl);
         socket.binaryType = "arraybuffer";
 
@@ -674,6 +767,26 @@ document.addEventListener("alpine:init", () => {
       if (stream) stream.scrollTop = stream.scrollHeight;
     },
 
+    // Human-readable "Maya is doing X..." labels per tool, so the caller
+    // sees what's actually happening during the silence while a tool runs
+    // instead of the raw function name — args are interpolated where they
+    // make the label more specific (e.g. which location/number).
+    toolActivityLabel(name, args) {
+      const a = args || {};
+      switch (name) {
+        case "check_network_status":
+          return `Checking network status in ${a.location || "your area"}...`;
+        case "check_incident_history":
+          return `Looking up past incidents for ${a.location || "your area"}...`;
+        case "restart_connection":
+          return `Resetting the connection for ${a.phone_number || "your line"}...`;
+        case "end_call":
+          return "Wrapping up the call...";
+        default:
+          return `Running ${name.replace(/_/g, " ")}...`;
+      }
+    },
+
     renderToolCallInspector(toolCall) {
       this.voice.toolCallsCount++;
 
@@ -692,6 +805,20 @@ document.addEventListener("alpine:init", () => {
         resolved: false,
         result: null,
       });
+
+      // Inline activity message in the chat feed itself (not just the side
+      // inspector) — this is what the caller actually sees during the gap
+      // between "let me check that" and the follow-up reply, instead of
+      // apparent silence.
+      this.messages.push({
+        id: `tool-${toolCall.id}`,
+        sender: this.voice.personaName,
+        text: this.toolActivityLabel(toolCall.function.name, args),
+        role: "tool",
+        resolved: false,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      });
+      this.$nextTick(() => this.scrollChatToBottom());
     },
 
     updateToolResponse(callId, rawOutput) {
@@ -708,6 +835,12 @@ document.addEventListener("alpine:init", () => {
       call.status = "Resolved";
       call.resolved = true;
       call.result = JSON.stringify(parsed, null, 2);
+
+      const msg = this.messages.find((m) => m.id === `tool-${callId}`);
+      if (msg) {
+        msg.resolved = true;
+        msg.text = msg.text.replace(/\.\.\.$/, " — done.");
+      }
     },
 
     // ===================================================================
@@ -786,7 +919,7 @@ document.addEventListener("alpine:init", () => {
 
       this.loginForm.submitting = true;
       try {
-        const res = await fetch("/api/auth/login", {
+        const res = await fetch(apiUrl("/api/auth/login"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
@@ -813,11 +946,17 @@ document.addEventListener("alpine:init", () => {
     async handleRegisterSubmit() {
       const name = this.registerForm.name.trim();
       const email = this.registerForm.email.trim();
+      const phoneNumber = this.registerForm.phoneNumber.trim();
       const password = this.registerForm.password;
       const confirmPassword = this.registerForm.confirmPassword;
 
-      if (!name || !email || !password) {
-        this.showToast("Missing Fields", "Please complete all required fields.", "error");
+      if (!name || !email || !phoneNumber || !password) {
+        this.showToast("Missing Fields", "Please complete all required fields, including phone number.", "error");
+        return;
+      }
+
+      if (!/^\d{7,15}$/.test(phoneNumber.replace(/[-\s]/g, ""))) {
+        this.showToast("Invalid Phone Number", "Enter a valid phone number (digits only).", "error");
         return;
       }
 
@@ -828,10 +967,10 @@ document.addEventListener("alpine:init", () => {
 
       this.registerForm.submitting = true;
       try {
-        const res = await fetch("/api/auth/register", {
+        const res = await fetch(apiUrl("/api/auth/register"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email, password }),
+          body: JSON.stringify({ name, email, password, phone_number: phoneNumber }),
         });
 
         const data = await res.json();
@@ -842,7 +981,7 @@ document.addEventListener("alpine:init", () => {
 
         this.currentUser = data.user;
         localStorage.setItem("omni_user", JSON.stringify(data.user));
-        this.registerForm = { name: "", email: "", password: "", confirmPassword: "", showPassword: false, submitting: false };
+        this.registerForm = { name: "", email: "", phoneNumber: "", password: "", confirmPassword: "", showPassword: false, submitting: false };
 
         this.showToast("Registration Complete", `Account registered for ${data.user.name}.`, "success");
         this.navigate("#ticket-queue");

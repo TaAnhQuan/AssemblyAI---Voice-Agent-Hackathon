@@ -7,37 +7,16 @@ schema-validated execution dispatcher for the voice agent.
 import json
 from typing import Any, Dict, Optional
 
+from db import get_current_network_status, get_incident_history, get_account_by_phone, increment_line_resets
+
 
 # ============================================================================
-# 1. In-Memory State (Mock Telecom Backend)
+# 1. Mock Telecom Backend
 # ============================================================================
-
-MOCK_NETWORK_STATUS: Dict[str, Dict[str, Any]] = {
-    "downtown": {
-        "status": "outage",
-        "affected_services": ["voice", "data"],
-        "eta": "45 minutes",
-        "incident_id": "NET-4471",
-    },
-    "riverside": {
-        "status": "degraded",
-        "affected_services": ["data"],
-        "eta": "20 minutes",
-        "incident_id": "NET-4468",
-    },
-}
-
-DEFAULT_NETWORK_STATUS = {
-    "status": "operational",
-    "affected_services": [],
-    "eta": None,
-    "incident_id": None,
-}
-
-MOCK_ACCOUNTS: Dict[str, Dict[str, Any]] = {
-    "5551234567": {"customer_name": "Alex Mercer", "plan": "Unlimited Plus", "status": "ACTIVE", "line_resets": 0},
-    "5559876543": {"customer_name": "Jamie Lee", "plan": "Basic 5GB", "status": "ACTIVE", "line_resets": 0},
-}
+# All lookup data (network status/incident history, customer accounts) lives
+# in SQLite — see db.py's network_incidents and accounts tables — so it's a
+# real, queryable dataset instead of hardcoded dicts. Every function below
+# just queries or updates it.
 
 
 # ============================================================================
@@ -48,10 +27,9 @@ def check_network_status(location: str) -> Dict[str, Any]:
     """
     Checks for known network outages or degraded service in a specific area.
     """
-    key = location.strip().lower()
-    info = MOCK_NETWORK_STATUS.get(key, DEFAULT_NETWORK_STATUS)
+    info = get_current_network_status(location)
 
-    if info["status"] == "operational":
+    if info is None or info["status"] == "resolved":
         return {
             "status": "success",
             "location": location,
@@ -70,6 +48,39 @@ def check_network_status(location: str) -> Dict[str, Any]:
             f"{info['status'].capitalize()} affecting {', '.join(info['affected_services'])} "
             f"in {location}. Estimated resolution: {info['eta']}."
         ),
+    }
+
+
+def check_incident_history(location: str) -> Dict[str, Any]:
+    """
+    Looks up past network incidents (ongoing or already resolved) for a
+    specific area, most recent first — for callers asking about an outage
+    they remember from earlier or "yesterday" rather than right now.
+    """
+    incidents = get_incident_history(location)
+
+    if not incidents:
+        return {
+            "status": "success",
+            "location": location,
+            "incidents": [],
+            "message": f"No recorded incidents on file for {location}.",
+        }
+
+    ongoing = [i for i in incidents if i["status"] != "resolved"]
+    resolved = [i for i in incidents if i["status"] == "resolved"]
+
+    summary_parts = []
+    if ongoing:
+        summary_parts.append(f"{len(ongoing)} ongoing incident(s)")
+    if resolved:
+        summary_parts.append(f"{len(resolved)} resolved incident(s), most recently: {resolved[0]['summary']}")
+
+    return {
+        "status": "success",
+        "location": location,
+        "incidents": incidents,
+        "message": f"Found {len(incidents)} incident(s) for {location} — " + "; ".join(summary_parts) + ".",
     }
 
 
@@ -92,8 +103,7 @@ def restart_connection(phone_number: str) -> Dict[str, Any]:
     """
     Remotely resets a customer's network connection/line to resolve connectivity issues.
     """
-    key = phone_number.strip().replace("-", "").replace(" ", "")
-    account = MOCK_ACCOUNTS.get(key)
+    account = get_account_by_phone(phone_number)
 
     if not account:
         return {
@@ -101,15 +111,29 @@ def restart_connection(phone_number: str) -> Dict[str, Any]:
             "message": f"No account found for phone number '{phone_number}'.",
         }
 
-    account["line_resets"] += 1
+    account = increment_line_resets(phone_number)
 
-    return {
+    result = {
         "status": "success",
         "phone_number": phone_number,
         "action": "CONNECTION_RESET",
         "reset_count_today": account["line_resets"],
+        "plan": account["plan"],
+        "5g_enabled": account["5g_enabled"],
         "message": f"The connection for {phone_number} has been reset. Please power-cycle the device and try again in about a minute.",
     }
+
+    # A line reset only clears transient connection state — it can't grant
+    # network-tier access the account's plan doesn't include, so a caller on
+    # a 4G-only plan reporting "no 5G" needs a plan explanation, not another
+    # reset retried on loop.
+    if not account["5g_enabled"]:
+        result["message"] += (
+            f" Note: this line is on the {account['plan']} plan, which doesn't include 5G access — "
+            "the reset will restore normal 4G LTE connectivity, but 5G requires upgrading the plan."
+        )
+
+    return result
 
 
 # ============================================================================
@@ -122,6 +146,28 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "check_network_status",
             "description": "Checks for known network outages or degraded service in a specific area.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "City, neighborhood, or area to check (e.g., 'Downtown', 'Riverside').",
+                    },
+                },
+                "required": ["location"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_incident_history",
+            "description": (
+                "Looks up past network incidents for a specific area, both ongoing and "
+                "already resolved, most recent first. Use this when the caller references "
+                "an outage from earlier or a previous day (e.g. 'the outage from yesterday') "
+                "rather than asking about right now."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -204,6 +250,12 @@ def execute_tool(tool_name: str, arguments: Any) -> Dict[str, Any]:
                 return {"status": "error", "message": "Missing required parameter 'location'."}
 
             return check_network_status(location=str(args["location"]))
+
+        elif tool_name == "check_incident_history":
+            if "location" not in args or not str(args["location"]).strip():
+                return {"status": "error", "message": "Missing required parameter 'location'."}
+
+            return check_incident_history(location=str(args["location"]))
 
         elif tool_name == "restart_connection":
             if "phone_number" not in args or not str(args["phone_number"]).strip():

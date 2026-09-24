@@ -67,7 +67,12 @@ MOCK_MODE = (not ASSEMBLYAI_API_KEY) or os.getenv("VOICE_MOCK_MODE", "").lower()
 
 print(
     f"[Voice Config] mode={'MOCK' if MOCK_MODE else 'LIVE'} "
-    f"url={ASSEMBLYAI_VOICE_AGENT_URL} key_set={bool(ASSEMBLYAI_API_KEY)}"
+    f"url={ASSEMBLYAI_VOICE_AGENT_URL} key_set={bool(ASSEMBLYAI_API_KEY)} "
+    # Raw repr of whatever this process's environment actually has for
+    # VOICE_MOCK_MODE — makes a platform env-var mismatch (wrong
+    # service/environment, stale deploy, unexpected value) provable from
+    # the boot log instead of inferred from MOCK_MODE alone.
+    f"raw_VOICE_MOCK_MODE={os.getenv('VOICE_MOCK_MODE')!r}"
 )
 
 # Paths

@@ -15,6 +15,16 @@ function apiUrl(path) {
   return `${API_BASE}${path}`;
 }
 
+// Attaches the current session's bearer token (issued at login/register,
+// stored alongside the user object — see currentUser.token) to an
+// authenticated fetch() call. The server derives "who is this user" from
+// this token instead of trusting a client-supplied email/ticket_id.
+function authHeaders(currentUser, extra) {
+  const headers = { ...(extra || {}) };
+  if (currentUser?.token) headers["Authorization"] = `Bearer ${currentUser.token}`;
+  return headers;
+}
+
 document.addEventListener("alpine:init", () => {
   Alpine.data("omniApp", () => ({
     // --- Routing / Auth ---
@@ -141,6 +151,13 @@ document.addEventListener("alpine:init", () => {
     },
 
     logout() {
+      // Best-effort server-side revocation — don't block logout on it.
+      if (this.currentUser?.token) {
+        fetch(apiUrl("/api/auth/logout"), {
+          method: "POST",
+          headers: authHeaders(this.currentUser),
+        }).catch(() => {});
+      }
       localStorage.removeItem("omni_user");
       this.currentUser = null;
       this.showToast("Session Ended", "You have signed out of your support workstation.", "info");
@@ -252,12 +269,12 @@ document.addEventListener("alpine:init", () => {
     // Ticket details (Live Room sidebar)
     // ===================================================================
     async fetchLatestTicket() {
-      if (!this.currentUser?.email) {
+      if (!this.currentUser?.token) {
         this.currentTicket = null;
         return;
       }
       try {
-        const res = await fetch(apiUrl(`/api/tickets/latest?email=${encodeURIComponent(this.currentUser.email)}`));
+        const res = await fetch(apiUrl("/api/tickets/latest"), { headers: authHeaders(this.currentUser) });
         if (res.ok) {
           const data = await res.json();
           this.currentTicket = data.ticket || null;
@@ -280,7 +297,9 @@ document.addEventListener("alpine:init", () => {
       const code = this.currentTicket?.ticket_id;
       if (!code) return;
       try {
-        const res = await fetch(apiUrl(`/api/tickets/${encodeURIComponent(code.replace(/^#/, ""))}/transcripts`));
+        const res = await fetch(apiUrl(`/api/tickets/${encodeURIComponent(code.replace(/^#/, ""))}/transcripts`), {
+          headers: authHeaders(this.currentUser),
+        });
         if (!res.ok) return;
         const data = await res.json();
         (data.transcripts || []).forEach((t) => {
@@ -318,12 +337,10 @@ document.addEventListener("alpine:init", () => {
 
       this.ticketForm.submitting = true;
       try {
-        const userEmail = this.currentUser?.email || "guest@omnipulse.internal";
         const res = await fetch(apiUrl("/api/tickets"), {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders(this.currentUser, { "Content-Type": "application/json" }),
           body: JSON.stringify({
-            user_email: userEmail,
             subject: subject,
             description: description,
             category: this.ticketForm.category,
@@ -369,10 +386,11 @@ document.addEventListener("alpine:init", () => {
       this.ticketsLoading = true;
       try {
         const params = new URLSearchParams();
-        if (this.currentUser?.email) params.set("email", this.currentUser.email);
         params.set("status", this.ticketStatusFilter);
 
-        const res = await fetch(apiUrl(`/api/tickets/list?${params.toString()}`));
+        const res = await fetch(apiUrl(`/api/tickets/list?${params.toString()}`), {
+          headers: authHeaders(this.currentUser),
+        });
         const data = await res.json();
         this.tickets = data.tickets || [];
       } catch (err) {
@@ -404,7 +422,7 @@ document.addEventListener("alpine:init", () => {
       try {
         const res = await fetch(apiUrl(`/api/tickets/${encodeURIComponent(code)}/status`), {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders(this.currentUser, { "Content-Type": "application/json" }),
           body: JSON.stringify({ status }),
         });
 
@@ -452,6 +470,7 @@ document.addEventListener("alpine:init", () => {
       try {
         const res = await fetch(apiUrl(`/api/tickets/${encodeURIComponent(code)}/request-human`), {
           method: "POST",
+          headers: authHeaders(this.currentUser),
         });
 
         if (!res.ok) {
@@ -483,6 +502,7 @@ document.addEventListener("alpine:init", () => {
       try {
         const res = await fetch(apiUrl(`/api/tickets/${encodeURIComponent(code)}/cancel-human`), {
           method: "POST",
+          headers: authHeaders(this.currentUser),
         });
 
         if (!res.ok) {
@@ -573,7 +593,7 @@ document.addEventListener("alpine:init", () => {
         const params = new URLSearchParams();
         if (category) params.set("category", category);
         if (this.currentTicket?.ticket_id) params.set("ticket", this.currentTicket.ticket_id.replace(/^#/, ""));
-        if (this.currentUser?.email) params.set("email", this.currentUser.email);
+        if (this.currentUser?.token) params.set("token", this.currentUser.token);
         const query = params.toString();
         const wsUrl = `${wsOrigin}/ws/voice${query ? `?${query}` : ""}`;
         const socket = new WebSocket(wsUrl);
@@ -931,8 +951,8 @@ document.addEventListener("alpine:init", () => {
           return;
         }
 
-        this.currentUser = data.user;
-        localStorage.setItem("omni_user", JSON.stringify(data.user));
+        this.currentUser = { ...data.user, token: data.token };
+        localStorage.setItem("omni_user", JSON.stringify(this.currentUser));
         this.showToast("Signed In", `Workstation provisioned for ${data.user.name}.`, "success");
         this.navigate("#ticket-queue");
       } catch (err) {
@@ -979,8 +999,8 @@ document.addEventListener("alpine:init", () => {
           return;
         }
 
-        this.currentUser = data.user;
-        localStorage.setItem("omni_user", JSON.stringify(data.user));
+        this.currentUser = { ...data.user, token: data.token };
+        localStorage.setItem("omni_user", JSON.stringify(this.currentUser));
         this.registerForm = { name: "", email: "", phoneNumber: "", password: "", confirmPassword: "", showPassword: false, submitting: false };
 
         this.showToast("Registration Complete", `Account registered for ${data.user.name}.`, "success");

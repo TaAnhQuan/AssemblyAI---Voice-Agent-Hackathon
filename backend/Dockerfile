@@ -16,13 +16,14 @@ WORKDIR /app/backend
 
 ENV PYTHONUNBUFFERED=1 \
     HOST=0.0.0.0 \
-    PORT=8000 \
-    # Voice load-testing default: mock mode avoids burning real AssemblyAI
-    # credits/minutes while still exercising the full WebSocket relay, audio
-    # streaming, and SQLite transcript-write path under concurrency. Override
-    # with --env VOICE_MOCK_MODE=false (and a real ASSEMBLYAI_API_KEY) to test
-    # against the live API instead.
-    VOICE_MOCK_MODE=true
+    PORT=8000
+
+# VOICE_MOCK_MODE is intentionally NOT set here — server.py already defaults
+# to MOCK whenever ASSEMBLYAI_API_KEY is unset, and to LIVE otherwise. A
+# hardcoded ENV default here previously overrode the platform's own
+# VOICE_MOCK_MODE=false setting on every deploy (a real bug on Railway that
+# silently forced MOCK mode). For local load-testing without burning
+# AssemblyAI credits, pass --env VOICE_MOCK_MODE=true explicitly instead.
 
 EXPOSE 8000
 

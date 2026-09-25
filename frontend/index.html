@@ -194,13 +194,13 @@
   <link rel="stylesheet" href="/static/css/styles.css"/>
 
   <!-- Backend origin when the frontend is deployed separately from the
-       FastAPI backend (e.g. this page on Vercel, backend on Railway).
+       FastAPI backend (e.g. this page on Vercel, backend on Render).
        Left "" here for local dev (python server.py serves this same file,
        so same-origin is correct) — a separate Vercel deploy of this
-       frontend must set this to the actual Railway backend URL before
+       frontend must set this to the actual Render backend URL before
        publishing, since this file is shared between both setups. -->
   <script>
-    window.API_BASE = "https://assemblyai-voice-agent-hackathon-production.up.railway.app";
+    window.API_BASE = "https://assemblyai-voice-agent-hackathon.onrender.com";
   </script>
 
   <!-- Voice engine + app logic must register Alpine.data() before Alpine core parses the DOM -->

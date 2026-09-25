@@ -4,6 +4,7 @@ backend/db.py — SQLite database driver with user and ticket persistence.
 import json
 import os
 import random
+import secrets
 import sqlite3
 import hashlib
 from datetime import datetime, timedelta, timezone
@@ -128,6 +129,19 @@ def init_db():
         existing_account_columns = {row["name"] for row in conn.execute("PRAGMA table_info(accounts)")}
         if "location" not in existing_account_columns:
             conn.execute("ALTER TABLE accounts ADD COLUMN location TEXT")
+
+        # Session tokens — issued on register/login, required on every
+        # authenticated REST call and on /ws/voice, so the server derives
+        # "who is this caller" from a verified token instead of trusting a
+        # client-supplied email/ticket_id query param (see get_session_user).
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                user_email TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL
+            )
+        """)
 
         conn.commit()
 
@@ -396,6 +410,46 @@ def verify_password(password: str, stored_hash: str, salt_hex: str) -> bool:
     computed_hash = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt_bytes, 100000).hex()
     return computed_hash == stored_hash
 
+SESSION_TTL_HOURS = 24
+
+def create_session(user_email: str) -> str:
+    """Issues a new opaque session token for a just-authenticated user
+    (called from register_user/authenticate_user). The token is what the
+    client must send back as Authorization: Bearer <token> (or ?token=
+    on the /ws/voice WebSocket) on every subsequent request — server.py's
+    get_current_user dependency resolves it back to this user_email via
+    get_session_user rather than trusting a client-supplied email."""
+    token = secrets.token_urlsafe(32)
+    expires_at = (datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO sessions (token, user_email, expires_at) VALUES (?, ?, ?)",
+            (token, user_email.strip().lower(), expires_at),
+        )
+        conn.commit()
+    return token
+
+def get_session_user(token: str) -> Optional[str]:
+    """Resolves a session token to the user_email it was issued for, or None
+    if the token is missing/unknown/expired. Opportunistically sweeps
+    expired sessions on every call instead of needing a separate cleanup
+    job — cheap at this project's scale."""
+    if not token:
+        return None
+    with get_db() as conn:
+        conn.execute("DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP")
+        row = conn.execute(
+            "SELECT user_email FROM sessions WHERE token = ? AND expires_at >= CURRENT_TIMESTAMP",
+            (token,),
+        ).fetchone()
+        conn.commit()
+        return row["user_email"] if row else None
+
+def delete_session(token: str) -> None:
+    with get_db() as conn:
+        conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        conn.commit()
+
 def register_user(email: str, name: str, password: str, phone_number: str) -> Dict[str, Any]:
     email_clean = email.strip().lower()
     name_clean = name.strip()
@@ -434,6 +488,7 @@ def register_user(email: str, name: str, password: str, phone_number: str) -> Di
     return {
         "success": True,
         "user": {"id": cursor.lastrowid, "email": email_clean, "name": name_clean, "phone_number": phone_clean},
+        "token": create_session(email_clean),
     }
 
 def authenticate_user(email: str, password: str) -> Dict[str, Any]:
@@ -450,6 +505,7 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
         return {
             "success": True,
             "user": {"id": row["id"], "email": row["email"], "name": row["name"], "phone_number": row["phone_number"]},
+            "token": create_session(row["email"]),
         }
 
 def create_ticket(user_email: str, subject: str, description: str, category: str, priority: str) -> Dict[str, Any]:
@@ -544,7 +600,7 @@ def get_ticket_by_code(ticket_code: str) -> Optional[Dict[str, Any]]:
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            """SELECT ticket_code, subject, description, category, priority, assigned_desk, status, human_requested, created_at
+            """SELECT ticket_code, user_email, subject, description, category, priority, assigned_desk, status, human_requested, created_at
                FROM tickets WHERE ticket_code = ?""",
             (code_clean,),
         )
@@ -553,6 +609,7 @@ def get_ticket_by_code(ticket_code: str) -> Optional[Dict[str, Any]]:
             return None
         return {
             "ticket_id": f"#{row['ticket_code']}",
+            "user_email": row["user_email"],
             "subject": row["subject"],
             "description": row["description"],
             "category": row["category"],

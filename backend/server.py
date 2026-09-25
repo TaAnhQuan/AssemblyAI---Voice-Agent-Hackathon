@@ -23,7 +23,7 @@ from model.ticket_payload import TicketPayload
 from model.ticket_status_payload import TicketStatusPayload
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi import Response
@@ -34,7 +34,7 @@ from db import (
     authenticate_user, register_user, create_ticket, get_latest_ticket_for_user,
     get_ticket_by_code, get_tickets, update_ticket_status, save_transcript_line,
     get_transcripts_for_ticket, request_human_callback, cancel_human_callback,
-    get_account_by_email,
+    get_account_by_email, get_session_user, delete_session,
 )
 from support_tools import TOOL_DEFINITIONS, execute_tool
 
@@ -99,6 +99,33 @@ async def serve_index():
     return FileResponse(FRONTEND_DIR / "index.html")
 
 
+async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
+    """Resolves the Authorization: Bearer <token> header to the user_email it
+    was issued for (db.create_session at login/register). Every endpoint that
+    reads or mutates a specific user's data depends on this instead of
+    trusting a client-supplied email/ticket_id query param directly."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header.")
+    token = authorization.split(" ", 1)[1].strip()
+    user_email = await asyncio.to_thread(get_session_user, token)
+    if not user_email:
+        raise HTTPException(status_code=401, detail="Session expired or invalid — please log in again.")
+    return user_email
+
+
+async def _require_own_ticket(ticket_id: str, current_user: str) -> Dict[str, Any]:
+    """Loads a ticket by code and 403s unless it belongs to current_user.
+    Shared by every ticket-scoped endpoint below so status changes, human
+    callback requests, and transcript reads can't be performed against
+    someone else's ticket just by knowing/guessing its (sequential) code."""
+    ticket = await asyncio.to_thread(get_ticket_by_code, ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail=f"No ticket found with id '{ticket_id}'.")
+    if ticket.get("user_email", "").strip().lower() != current_user:
+        raise HTTPException(status_code=403, detail="This ticket does not belong to the current user.")
+    return ticket
+
+
 @app.post("/api/auth/register")
 async def api_register(payload: AuthPayload):
     # Every db.py call below runs synchronous sqlite3 I/O (and, for auth,
@@ -123,16 +150,29 @@ async def api_login(payload: AuthPayload):
     return res
 
 
+@app.post("/api/auth/logout")
+async def api_logout(authorization: Optional[str] = Header(None)):
+    # Best-effort: accepts a missing/already-invalid token without erroring
+    # so the client can always clear its local session state.
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+        await asyncio.to_thread(delete_session, token)
+    return {"success": True}
+
+
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     return Response(status_code=204)
 
 
 @app.post("/api/tickets")
-async def api_create_ticket(payload: TicketPayload):
+async def api_create_ticket(payload: TicketPayload, current_user: str = Depends(get_current_user)):
+    # user_email is derived from the authenticated session, never trusted
+    # from the request body, so a ticket can't be filed under someone else's
+    # account by passing a different user_email in the payload.
     ticket = await asyncio.to_thread(
         create_ticket,
-        user_email=payload.user_email,
+        user_email=current_user,
         subject=payload.subject,
         description=payload.description,
         category=payload.category,
@@ -141,13 +181,14 @@ async def api_create_ticket(payload: TicketPayload):
     return ticket
 
 @app.get("/api/tickets/list")
-async def api_list_tickets(email: Optional[str] = None, status: Optional[str] = None):
-    tickets = await asyncio.to_thread(get_tickets, email, status)
+async def api_list_tickets(status: Optional[str] = None, current_user: str = Depends(get_current_user)):
+    tickets = await asyncio.to_thread(get_tickets, current_user, status)
     return {"tickets": tickets}
 
 
 @app.patch("/api/tickets/{ticket_id}/status")
-async def api_update_ticket_status(ticket_id: str, payload: TicketStatusPayload):
+async def api_update_ticket_status(ticket_id: str, payload: TicketStatusPayload, current_user: str = Depends(get_current_user)):
+    await _require_own_ticket(ticket_id, current_user)
     try:
         ticket = await asyncio.to_thread(update_ticket_status, ticket_id, payload.status)
     except ValueError as err:
@@ -159,14 +200,16 @@ async def api_update_ticket_status(ticket_id: str, payload: TicketStatusPayload)
     return ticket
 
 @app.post("/api/tickets/{ticket_id}/request-human")
-async def api_request_human_callback(ticket_id: str):
+async def api_request_human_callback(ticket_id: str, current_user: str = Depends(get_current_user)):
+    await _require_own_ticket(ticket_id, current_user)
     ticket = await asyncio.to_thread(request_human_callback, ticket_id)
     if ticket is None:
         raise HTTPException(status_code=404, detail=f"No ticket found with id '{ticket_id}'.")
     return ticket
 
 @app.post("/api/tickets/{ticket_id}/cancel-human")
-async def api_cancel_human_callback(ticket_id: str):
+async def api_cancel_human_callback(ticket_id: str, current_user: str = Depends(get_current_user)):
+    await _require_own_ticket(ticket_id, current_user)
     ticket = await asyncio.to_thread(cancel_human_callback, ticket_id)
     if ticket is None:
         raise HTTPException(status_code=404, detail=f"No ticket found with id '{ticket_id}'.")
@@ -174,13 +217,14 @@ async def api_cancel_human_callback(ticket_id: str):
 
 
 @app.get("/api/tickets/latest")
-async def api_get_latest_ticket(email: str):
-    ticket = await asyncio.to_thread(get_latest_ticket_for_user, email)
+async def api_get_latest_ticket(current_user: str = Depends(get_current_user)):
+    ticket = await asyncio.to_thread(get_latest_ticket_for_user, current_user)
     return {"ticket": ticket}
 
 
 @app.get("/api/tickets/{ticket_id}/transcripts")
-async def api_get_ticket_transcripts(ticket_id: str):
+async def api_get_ticket_transcripts(ticket_id: str, current_user: str = Depends(get_current_user)):
+    await _require_own_ticket(ticket_id, current_user)
     transcripts = await asyncio.to_thread(get_transcripts_for_ticket, ticket_id)
     return {"transcripts": transcripts}
 
@@ -788,14 +832,38 @@ async def run_mock_voice_agent(
 async def voice_relay(client_ws: WebSocket):
     await client_ws.accept()
 
+    # Browsers can't set custom headers on a WebSocket handshake, so the
+    # session token travels as a query param here instead of an Authorization
+    # header. user_email is derived from it (never trusted from a client-
+    # supplied ?email= — that would let anyone impersonate any caller and
+    # have Maya read out that caller's real phone number/plan as context).
+    token = client_ws.query_params.get("token")
+    user_email = await asyncio.to_thread(get_session_user, token) if token else None
+    if not user_email:
+        await client_ws.send_text(json.dumps({
+            "type": "session_ended",
+            "reason": "Missing or invalid session — please log in again.",
+        }))
+        await client_ws.close()
+        return
+
     category = client_ws.query_params.get("category")
     ticket_code = client_ws.query_params.get("ticket")
-    user_email = client_ws.query_params.get("email")
     persona = resolve_persona(category)
 
     # Pull the actual ticket (subject/description) so the greeting/prompt can
     # reference the caller's real reported problem instead of a generic line.
     ticket = await asyncio.to_thread(get_ticket_by_code, ticket_code) if ticket_code else None
+    # A ticket_code was supplied but doesn't belong to this session's user —
+    # refuse to attach it rather than leaking another caller's ticket/account
+    # context (subject, description, phone number, prior transcript) to Maya.
+    if ticket and ticket.get("user_email", "").strip().lower() != user_email:
+        await client_ws.send_text(json.dumps({
+            "type": "session_ended",
+            "reason": "This ticket does not belong to the current user.",
+        }))
+        await client_ws.close()
+        return
     # Pull every transcript line ever recorded against this ticket — from
     # this call's prior sessions — so the agent picks up with full context
     # instead of starting cold on a repeat call.
